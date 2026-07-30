@@ -40,7 +40,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-30-mail-clean";
+const APP_VERSION = "2026-07-30-json-safe";
 
 app.get("/stamp", (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -727,6 +727,12 @@ fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
 if (!fs.existsSync(MAIL_LOG_PATH)) {
   writeMailLog([]);
 }
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  if (res.headersSent) return;
+  res.status(500).json({ ok: false, error: err.message || "서버 오류" });
+});
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`위캔 납품서류 웹폼 실행 중`);

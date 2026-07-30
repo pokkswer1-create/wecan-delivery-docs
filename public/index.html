@@ -380,6 +380,23 @@
     function money(n) {
       return Math.round(Number(n) || 0).toLocaleString("ko-KR");
     }
+    async function readJson(res) {
+      const raw = await res.text();
+      const trimmed = (raw || "").trim();
+      if (!trimmed) {
+        throw new Error(`서버 응답이 비어 있습니다. (${res.status})`);
+      }
+      if (trimmed[0] === "<") {
+        throw new Error(
+          "서버가 잠시 응답하지 못했습니다. 10초 뒤 다시 눌러 주세요. (무료 서버 대기/시간초과)"
+        );
+      }
+      try {
+        return JSON.parse(trimmed);
+      } catch (_) {
+        throw new Error(`서버 응답을 읽지 못했습니다. (${res.status})`);
+      }
+    }
     function escapeAttr(s) {
       return String(s ?? "")
         .replace(/&/g, "&amp;")
@@ -587,7 +604,7 @@
       let server = { presets: [], updatedAt: null };
       try {
         const res = await fetch("/api/presets");
-        const data = await res.json();
+        const data = await readJson(res);
         if (data.ok && Array.isArray(data.presets)) {
           server = { presets: data.presets, updatedAt: data.updatedAt || null };
         }
@@ -612,7 +629,7 @@
       }
 
       if (!list.length) {
-        const meta = await fetch("/api/meta").then((r) => r.json());
+        const meta = await fetch("/api/meta").then((r) => readJson(r));
         list = (meta.packages || []).map((p) => ({
           id: p.id,
           title: p.title,
@@ -644,7 +661,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pin: els.pin.value }),
         });
-        const data = await res.json();
+        const data = await readJson(res);
         if (!data.ok) throw new Error(data.error || "비밀번호가 올바르지 않습니다.");
         setNavUnlocked(true);
         await loadCatalog();
@@ -655,7 +672,7 @@
     }
 
     async function init() {
-      const meta = await fetch("/api/meta").then((r) => r.json());
+      const meta = await fetch("/api/meta").then((r) => readJson(r));
       els.client.value = meta.clientDefault || "";
       els.date.value = todayLocal();
       els.emailHint.textContent = meta.emailConfigured
@@ -718,7 +735,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pin: els.pin.value, presets: catalog }),
         });
-        const data = await res.json();
+        const data = await readJson(res);
         if (!data.ok) throw new Error(data.error || "저장 실패");
         catalog = data.presets;
         writeLocalBundle(catalog, data.updatedAt || now);
@@ -749,7 +766,7 @@
         return;
       }
       els.submitBtn.disabled = true;
-      showStatus("ok", "생성 중… 잠시만 기다려 주세요.");
+      showStatus("ok", "생성 중… 최대 1분 정도 걸릴 수 있습니다.");
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
@@ -768,7 +785,7 @@
             sendEmail: els.sendEmail.checked,
           }),
         });
-        const data = await res.json();
+        const data = await readJson(res);
         if (!data.ok) throw new Error(data.error || "실패");
         if (data.emailed) {
           try {
