@@ -477,11 +477,13 @@
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "실패");
         showStatus(
-          "ok",
+          data.emailError ? "err" : "ok",
           [
             `완료: ${data.fileName}`,
             `합계: ${money(data.totalSum)}원`,
-            data.emailed ? "이메일 발송 완료" : "이메일 미발송 (다운로드만)",
+            data.emailed
+              ? "이메일 발송 완료"
+              : data.emailError || "이메일 미발송 (다운로드만)",
             `<a href="${data.downloadUrl}" download>PDF 다운로드</a>`,
           ].join("\n")
         );

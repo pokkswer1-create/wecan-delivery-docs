@@ -57,11 +57,17 @@ function createTransport() {
       `이메일 설정이 없습니다. 누락: ${missing.join(", ") || "SMTP_PASS 형식"}. Render Environment를 확인하세요.`
     );
   }
+  const port = Number(process.env.SMTP_PORT || 465);
+  const secure = String(process.env.SMTP_SECURE || "true") !== "false";
   return nodemailer.createTransport({
     host,
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: String(process.env.SMTP_SECURE || "true") !== "false",
+    port,
+    secure,
     auth: { user, pass },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    tls: { rejectUnauthorized: false },
   });
 }
 
@@ -145,39 +151,48 @@ app.post("/api/generate", async (req, res) => {
     const titles = result.packages.map((p) => p.title).join(", ");
 
     let emailed = false;
+    let emailError = "";
     if (sendEmail) {
       if (!emailTo) {
         return res.status(400).json({ ok: false, error: "받는 이메일 주소를 입력하세요." });
       }
-      const transporter = createTransport();
-      const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-      await transporter.sendMail({
-        from: `"위캔(wecan)" <${from}>`,
-        to: emailTo,
-        cc: emailCc || undefined,
-        subject:
-          subject ||
-          `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`,
-        text: [
-          `${client || DEFAULT_CLIENT} 귀중`,
-          "",
-          `위캔 납품서류를 첨부합니다.`,
-          `품목: ${titles}`,
-          `합계(부가세포함): ${fmt(totalSum)}원`,
-          `작성일: ${date || todayISO()}`,
-          "",
-          `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
-          `예금주: ${SUPPLIER.accountHolder}`,
-          `문의: ${SUPPLIER.phone} / ${SUPPLIER.email}`,
-        ].join("\n"),
-        attachments: [
-          {
-            filename: fileName,
-            path: result.outPath,
-          },
-        ],
-      });
-      emailed = true;
+      try {
+        const transporter = createTransport();
+        const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+        await transporter.sendMail({
+          from: `"위캔(wecan)" <${from}>`,
+          to: emailTo,
+          cc: emailCc || undefined,
+          subject:
+            subject ||
+            `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`,
+          text: [
+            `${client || DEFAULT_CLIENT} 귀중`,
+            "",
+            `위캔 납품서류를 첨부합니다.`,
+            `품목: ${titles}`,
+            `합계(부가세포함): ${fmt(totalSum)}원`,
+            `작성일: ${date || todayISO()}`,
+            "",
+            `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
+            `예금주: ${SUPPLIER.accountHolder}`,
+            `문의: ${SUPPLIER.phone} / ${SUPPLIER.email}`,
+          ].join("\n"),
+          attachments: [
+            {
+              filename: fileName,
+              path: result.outPath,
+            },
+          ],
+        });
+        emailed = true;
+      } catch (mailErr) {
+        console.error("email failed", mailErr);
+        emailError =
+          mailErr.code === "ETIMEDOUT" || /timeout/i.test(mailErr.message || "")
+            ? "메일 서버 연결 시간 초과(클라우드에서 네이버 SMTP가 막힐 수 있음). PDF는 생성됐습니다."
+            : `메일 발송 실패: ${mailErr.message}. PDF는 생성됐습니다.`;
+      }
     }
 
     res.json({
@@ -185,6 +200,7 @@ app.post("/api/generate", async (req, res) => {
       fileName,
       downloadUrl,
       emailed,
+      emailError,
       packages: result.packages.map((p) => ({
         id: p.id,
         title: p.title,
