@@ -101,7 +101,7 @@ function buildMailContent({
     process.env.SMTP_FROM ||
     process.env.SMTP_USER ||
     SUPPLIER.email;
-  const replyTo = process.env.MAIL_REPLY_TO || SUPPLIER.email;
+  const replyTo = process.env.MAIL_REPLY_TO || fromEmail;
   const mailSubject =
     subject || `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`;
   const text = [
@@ -114,7 +114,7 @@ function buildMailContent({
     "",
     `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
     `예금주: ${SUPPLIER.accountHolder}`,
-    `문의: ${SUPPLIER.phone} / ${SUPPLIER.email}`,
+    `문의: ${SUPPLIER.phone} / ${mail.fromEmail}`,
   ].join("\n");
   const pdfBase64 = fs.readFileSync(filePath).toString("base64");
   return {
@@ -276,7 +276,7 @@ app.get("/api/meta", (_req, res) => {
   res.json({
     clientDefault: DEFAULT_CLIENT,
     dateDefault: todayISO(),
-    supplierEmail: SUPPLIER.email,
+    supplierEmail: process.env.MAIL_FROM || process.env.SMTP_FROM || SUPPLIER.email,
     packages: PACKAGE_TEMPLATES.map((t) => {
       const sample =
         t.id === "3_지주대임대"

@@ -23,6 +23,15 @@ const SUPPLIER = {
 
 const DEFAULT_CLIENT = "";
 
+function contactEmail() {
+  return (
+    process.env.MAIL_FROM ||
+    process.env.SMTP_FROM ||
+    process.env.SMTP_USER ||
+    SUPPLIER.email
+  );
+}
+
 function fmt(n) {
   return Math.round(n).toLocaleString("ko-KR");
 }
@@ -343,7 +352,7 @@ function supplierBoxHtml() {
       <tr><td class="k">대표자</td><td>${SUPPLIER.ceo}</td></tr>
       <tr><td class="k">등록번호</td><td>${SUPPLIER.bizNo}</td></tr>
       <tr><td class="k">사업장</td><td>${SUPPLIER.address}</td></tr>
-      <tr><td class="k">연락처</td><td>${SUPPLIER.phone} / ${SUPPLIER.email}</td></tr>
+      <tr><td class="k">연락처</td><td>${SUPPLIER.phone} / ${contactEmail()}</td></tr>
     </table>
   </div>`;
 }
