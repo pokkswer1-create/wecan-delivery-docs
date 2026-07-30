@@ -40,7 +40,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-30-mail-receipt";
+const APP_VERSION = "2026-07-30-manage-closed";
 
 app.get("/stamp", (_req, res) => {
   res.set("Cache-Control", "no-store");
