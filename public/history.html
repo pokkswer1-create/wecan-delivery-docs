@@ -172,6 +172,7 @@
   </div>
 
   <script>
+    const LOCAL_KEY = "wecan_mail_log_v1";
     const els = {
       pin: document.getElementById("pin"),
       loadBtn: document.getElementById("loadBtn"),
@@ -198,48 +199,114 @@
       return Math.round(Number(n) || 0).toLocaleString("ko-KR");
     }
 
+    function readLocal() {
+      try {
+        const list = JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]");
+        return Array.isArray(list) ? list : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function writeLocal(list) {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(list.slice(0, 200)));
+    }
+
+    function mergeItems(serverItems, localItems) {
+      const map = new Map();
+      [...localItems, ...serverItems].forEach((e) => {
+        if (!e || !e.id) return;
+        const prev = map.get(e.id);
+        if (!prev) {
+          map.set(e.id, e);
+          return;
+        }
+        // 수신확인·최신 정보 우선
+        map.set(e.id, {
+          ...prev,
+          ...e,
+          downloadedAt: e.downloadedAt || prev.downloadedAt || null,
+          downloadCount: Math.max(Number(e.downloadCount || 0), Number(prev.downloadCount || 0)),
+          receiptConfirmed: Boolean(
+            e.receiptConfirmed || prev.receiptConfirmed || e.downloadedAt || prev.downloadedAt
+          ),
+          receiptUrl: e.receiptUrl || prev.receiptUrl || "",
+        });
+      });
+      return [...map.values()].sort((a, b) => String(b.sentAt || "").localeCompare(String(a.sentAt || "")));
+    }
+
+    function renderItems(items) {
+      if (!items.length) {
+        els.list.className = "empty";
+        els.list.innerHTML =
+          "아직 발송 이력이 없습니다.<br><br>납품서류에서 이메일 발송을 한 번 하면 여기에 나타납니다.<br>(이 기능 추가 전에 보낸 메일은 기록되지 않습니다)";
+        return;
+      }
+      els.list.className = "";
+      els.list.innerHTML = items
+        .map((e) => {
+          const confirmed = e.receiptConfirmed || e.downloadedAt;
+          return `<div class="item">
+            <div class="top">
+              <strong>${escapeHtml(e.subject || e.titles || "납품서류")}</strong>
+              <span class="badge ${confirmed ? "received" : "sent"}">${confirmed ? "수신확인" : "발송됨"}</span>
+            </div>
+            <div class="meta">
+              받는 사람: ${escapeHtml(e.to || "-")}<br>
+              발송: ${fmtTime(e.sentAt)}<br>
+              수신확인(다운로드): ${confirmed ? fmtTime(e.downloadedAt) : "아직 없음"}
+              ${e.downloadCount ? ` · ${e.downloadCount}회` : ""}<br>
+              합계: ${money(e.totalSum)}원
+              ${e.receiptUrl ? `<br><a href="${escapeAttr(e.receiptUrl)}" target="_blank" rel="noopener">수신확인 링크</a>` : ""}
+            </div>
+          </div>`;
+        })
+        .join("");
+    }
+
     async function load() {
-      if (!els.pin.value) {
-        setStatus("err", "비밀번호를 입력하세요.");
+      const pin = String(els.pin.value || "").trim();
+      if (!pin) {
+        setStatus("err", "비밀번호를 입력하세요. (납품서류와 동일)");
         return;
       }
       setStatus("", "불러오는 중…");
+      const localItems = readLocal();
+      let serverItems = [];
+      let serverErr = "";
       try {
-        const res = await fetch("/api/mail-log?pin=" + encodeURIComponent(els.pin.value));
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "불러오기 실패");
-        const items = data.items || [];
-        if (!items.length) {
-          els.list.className = "empty";
-          els.list.textContent = "아직 발송 이력이 없습니다.";
-          setStatus("ok", "0건");
-          return;
+        const res = await fetch("/api/mail-log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `서버 오류 (${res.status})`);
         }
-        els.list.className = "";
-        els.list.innerHTML = items
-          .map((e) => {
-            const confirmed = e.receiptConfirmed;
-            return `<div class="item">
-              <div class="top">
-                <strong>${escapeHtml(e.subject || e.titles || "납품서류")}</strong>
-                <span class="badge ${confirmed ? "received" : "sent"}">${confirmed ? "수신확인" : "발송됨"}</span>
-              </div>
-              <div class="meta">
-                받는 사람: ${escapeHtml(e.to)}<br>
-                발송: ${fmtTime(e.sentAt)}<br>
-                수신확인(다운로드): ${confirmed ? fmtTime(e.downloadedAt) : "아직 없음"}
-                ${e.downloadCount ? ` · ${e.downloadCount}회` : ""}<br>
-                합계: ${money(e.totalSum)}원
-                ${e.receiptUrl ? `<br><a href="${escapeAttr(e.receiptUrl)}" target="_blank" rel="noopener">수신확인 링크</a>` : ""}
-              </div>
-            </div>`;
-          })
-          .join("");
-        const okCount = items.filter((x) => x.receiptConfirmed).length;
-        setStatus("ok", `${items.length}건 · 수신확인 ${okCount}건`);
+        serverItems = data.items || [];
+        // 서버 수신된 수신확인을 로컬에도 반영
+        if (serverItems.length) {
+          writeLocal(mergeItems(serverItems, localItems));
+        }
       } catch (err) {
-        setStatus("err", err.message);
+        serverErr = err.message || String(err);
       }
+
+      const items = mergeItems(serverItems, localItems);
+      renderItems(items);
+      if (serverErr && !items.length) {
+        setStatus("err", serverErr);
+        return;
+      }
+      const okCount = items.filter((x) => x.receiptConfirmed || x.downloadedAt).length;
+      setStatus(
+        "ok",
+        serverErr
+          ? `이 폰 저장 ${items.length}건 표시 (서버: ${serverErr})`
+          : `${items.length}건 · 수신확인 ${okCount}건`
+      );
     }
 
     function escapeHtml(s) {

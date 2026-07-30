@@ -770,6 +770,30 @@
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "실패");
+        if (data.emailed) {
+          try {
+            const key = "wecan_mail_log_v1";
+            const prev = JSON.parse(localStorage.getItem(key) || "[]");
+            const entry = {
+              id: data.receiptId || `local_${Date.now()}`,
+              to: els.emailTo.value.trim(),
+              cc: els.emailCc.value.trim(),
+              subject: els.subject.value.trim() || data.fileName,
+              titles: (data.packages || []).map((p) => p.title).join(", "),
+              totalSum: data.totalSum || 0,
+              fileName: data.fileName,
+              client: els.client.value.trim(),
+              sentAt: new Date().toISOString(),
+              downloadedAt: null,
+              downloadCount: 0,
+              status: "sent",
+              receiptConfirmed: false,
+              receiptUrl: data.receiptUrl || "",
+            };
+            const next = [entry, ...prev.filter((x) => x.id !== entry.id)].slice(0, 200);
+            localStorage.setItem(key, JSON.stringify(next));
+          } catch (_) {}
+        }
         showStatus(
           data.emailError ? "err" : "ok",
           [

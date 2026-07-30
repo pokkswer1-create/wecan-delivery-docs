@@ -40,7 +40,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-30-manage-closed";
+const APP_VERSION = "2026-07-30-history-fix";
 
 app.get("/stamp", (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -612,21 +612,25 @@ app.post("/api/generate", async (req, res) => {
           receiptUrl,
         });
         emailed = true;
-        upsertMailLog({
-          id: receiptId,
-          to: emailTo,
-          cc: emailCc || "",
-          subject: mailSubject,
-          titles,
-          totalSum,
-          fileName,
-          client: client || DEFAULT_CLIENT,
-          sentAt: new Date().toISOString(),
-          status: "sent",
-          downloadedAt: null,
-          downloadCount: 0,
-          receiptUrl,
-        });
+        try {
+          upsertMailLog({
+            id: receiptId,
+            to: emailTo,
+            cc: emailCc || "",
+            subject: mailSubject,
+            titles,
+            totalSum,
+            fileName,
+            client: client || DEFAULT_CLIENT,
+            sentAt: new Date().toISOString(),
+            status: "sent",
+            downloadedAt: null,
+            downloadCount: 0,
+            receiptUrl,
+          });
+        } catch (logErr) {
+          console.error("mail log write failed", logErr);
+        }
       } catch (mailErr) {
         console.error("email failed", mailErr);
         emailError =
@@ -692,7 +696,19 @@ app.get("/api/mail-log", (req, res) => {
   if (String(pin || "") !== String(FORM_PIN)) {
     return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
   }
-  const list = readMailLog().map((e) => ({
+  res.json({ ok: true, items: summarizeMailLog() });
+});
+
+app.post("/api/mail-log", (req, res) => {
+  const { pin } = req.body || {};
+  if (String(pin || "") !== String(FORM_PIN)) {
+    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+  }
+  res.json({ ok: true, items: summarizeMailLog() });
+});
+
+function summarizeMailLog() {
+  return readMailLog().map((e) => ({
     id: e.id,
     to: e.to,
     cc: e.cc || "",
@@ -709,11 +725,14 @@ app.get("/api/mail-log", (req, res) => {
     receiptConfirmed: Boolean(e.downloadedAt || e.receiptConfirmed),
     receiptUrl: e.receiptUrl || "",
   }));
-  res.json({ ok: true, items: list });
-});
+}
 
 fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+// ensure mail log file exists
+if (!fs.existsSync(MAIL_LOG_PATH)) {
+  writeMailLog([]);
+}
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`위캔 납품서류 웹폼 실행 중`);
