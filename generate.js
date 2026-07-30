@@ -141,7 +141,7 @@ const PACKAGE_TEMPLATES = [
   {
     id: "4_전사유니폼상의",
     title: "전사 유니폼 상의",
-    defaultTotalIncl: 45000,
+    defaultTotalIncl: 25000,
     photos: [],
     build(totalIncl) {
       const man = Math.round(totalIncl / 10000);
@@ -167,7 +167,7 @@ const PACKAGE_TEMPLATES = [
   {
     id: "5_전사유니폼하의",
     title: "전사 유니폼 하의",
-    defaultTotalIncl: 40000,
+    defaultTotalIncl: 20000,
     photos: [],
     build(totalIncl) {
       const man = Math.round(totalIncl / 10000);
@@ -193,7 +193,7 @@ const PACKAGE_TEMPLATES = [
   {
     id: "6_전사유니폼세트",
     title: "전사 유니폼 세트",
-    defaultTotalIncl: 80000,
+    defaultTotalIncl: 40000,
     photos: [],
     build(totalIncl) {
       const man = Math.round(totalIncl / 10000);
