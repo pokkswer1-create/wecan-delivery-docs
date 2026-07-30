@@ -1,0 +1,7 @@
+node_modules
+tmp
+out
+.git
+.env
+*.pdf
+_regen_tmp.js

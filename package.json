@@ -1,0 +1,21 @@
+{
+  "name": "wecan-delivery-docs",
+  "private": true,
+  "scripts": {
+    "generate": "node generate.js",
+    "start": "node server.js",
+    "web": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "nodemailer": "^6.10.1",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^23.11.1",
+    "sharp": "^0.35.3",
+    "xlsx": "^0.18.5"
+  }
+}
