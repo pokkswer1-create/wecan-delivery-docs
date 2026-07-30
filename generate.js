@@ -138,6 +138,84 @@ const PACKAGE_TEMPLATES = [
       };
     },
   },
+  {
+    id: "4_전사유니폼상의",
+    title: "전사 유니폼 상의",
+    defaultTotalIncl: 45000,
+    photos: [],
+    build(totalIncl) {
+      const man = Math.round(totalIncl / 10000);
+      return {
+        id: this.id,
+        title: this.title,
+        fileName: `4_전사유니폼상의_${man}만원_납품서류.pdf`,
+        totalIncl,
+        items: [
+          {
+            name: "전사 유니폼 상의",
+            spec: "열전사 / 팀로고·번호 포함",
+            unit: "매",
+            qty: 1,
+            unitPriceIncl: totalIncl,
+          },
+        ],
+        photos: this.photos,
+        note: "납품 품목: 전사 유니폼 상의. 부가세 포함 금액입니다.",
+      };
+    },
+  },
+  {
+    id: "5_전사유니폼하의",
+    title: "전사 유니폼 하의",
+    defaultTotalIncl: 40000,
+    photos: [],
+    build(totalIncl) {
+      const man = Math.round(totalIncl / 10000);
+      return {
+        id: this.id,
+        title: this.title,
+        fileName: `5_전사유니폼하의_${man}만원_납품서류.pdf`,
+        totalIncl,
+        items: [
+          {
+            name: "전사 유니폼 하의",
+            spec: "열전사 / 팀로고 포함",
+            unit: "매",
+            qty: 1,
+            unitPriceIncl: totalIncl,
+          },
+        ],
+        photos: this.photos,
+        note: "납품 품목: 전사 유니폼 하의. 부가세 포함 금액입니다.",
+      };
+    },
+  },
+  {
+    id: "6_전사유니폼세트",
+    title: "전사 유니폼 세트",
+    defaultTotalIncl: 80000,
+    photos: [],
+    build(totalIncl) {
+      const man = Math.round(totalIncl / 10000);
+      return {
+        id: this.id,
+        title: this.title,
+        fileName: `6_전사유니폼세트_${man}만원_납품서류.pdf`,
+        totalIncl,
+        items: [
+          {
+            name: "전사 유니폼 세트",
+            spec: "상의+하의 / 열전사 / 팀로고·번호 포함",
+            unit: "세트",
+            qty: 1,
+            unitPriceIncl: totalIncl,
+          },
+        ],
+        photos: this.photos,
+        note: "납품 품목: 전사 유니폼 세트(상의+하의). 부가세 포함 금액입니다.",
+      };
+    },
+  },
 ];
 
 const PACKAGES = PACKAGE_TEMPLATES.map((t) => {
