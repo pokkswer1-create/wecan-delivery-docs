@@ -313,15 +313,23 @@
 
     <div class="card hidden" id="corpCard">
       <h2>기업 도장</h2>
-      <label for="company">회사명 (바깥 원 / 사각 글자)</label>
-      <input id="company" type="text" maxlength="16" placeholder="예: 주식회사 위캔" value="주식회사 위캔" />
-      <label for="center">중앙 문구 (원형만)</label>
-      <input id="center" type="text" maxlength="6" placeholder="예: 대표이사" value="대표이사" />
+      <label for="company">회사명 (바깥 원 글자)</label>
+      <input id="company" type="text" maxlength="16" placeholder="예: 주식회사위캔" value="주식회사위캔" />
+      <label for="center">중앙 문구 (원형)</label>
+      <input id="center" type="text" maxlength="6" placeholder="예: 대표이사 / 代表理事" value="代表理事" />
       <div class="chips" id="centerChips">
+        <button type="button" data-center="代表理事">代表理事</button>
         <button type="button" data-center="대표이사">대표이사</button>
+        <button type="button" data-center="使用認印">使用認印</button>
         <button type="button" data-center="사용인감">사용인감</button>
-        <button type="button" data-center="직인">직인</button>
-        <button type="button" data-center="인">인</button>
+      </div>
+      <div class="opts-row" style="display:flex;gap:14px;flex-wrap:wrap;margin:0 0 12px;font-size:13px">
+        <label style="display:flex;align-items:center;gap:6px;margin:0;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="inkTexture" checked style="width:auto;margin:0" /> 실인 질감
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="centerHanja" checked style="width:auto;margin:0" /> 중앙 자동 한자
+        </label>
       </div>
       <label>기업 도장 형태</label>
       <div class="corp-shapes" id="corpShapes"></div>
@@ -496,60 +504,109 @@
     }
 
     function drawRingText(ctx, text, cx, cy, radius, fontSize) {
-      const chars = [...onlyChars(text)];
+      let chars = [...onlyChars(text)];
       if (!chars.length) return;
-      // 글자가 적을 때 원주를 채우도록 가운데점(·) 보강
-      while (chars.length < 8) {
-        const next = [];
-        chars.forEach((ch, i) => {
-          next.push(ch);
-          if (i < chars.length - 1) next.push("·");
-        });
-        chars.length = 0;
-        chars.push(...next);
-        if (chars.length >= 10) break;
-      }
-      const n = chars.length;
+      // 상단 ★ 마커 + 회사명 (참고 이미지 스타일)
+      const ring = ["★", ...chars];
+      const n = ring.length;
       ctx.fillStyle = INK;
-      ctx.font = `700 ${fontSize}px ${SEAL_FONT}`;
+      ctx.font = `800 ${fontSize}px "Malgun Gothic", Gulim, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      // 시계방향, 상단에서 시작
       for (let i = 0; i < n; i++) {
-        const a = -Math.PI / 2 + ((i + 0.5) / n) * Math.PI * 2;
+        // 12시 방향부터 시계방향
+        const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
         ctx.save();
         ctx.translate(cx + Math.cos(a) * radius, cy + Math.sin(a) * radius);
         ctx.rotate(a + Math.PI / 2);
-        ctx.fillText(chars[i], 0, 0);
+        const ch = ring[i];
+        if (ch === "★") {
+          ctx.beginPath();
+          ctx.arc(0, 0, fontSize * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillText(ch, 0, 0);
+        }
         ctx.restore();
       }
     }
 
+    // 중앙 4글자: 전통 인감처럼 오른쪽 열 → 왼쪽 열 (위에서 아래)
     function drawCenterGrid(ctx, text, cx, cy, box, fontSize) {
-      let chars = [...onlyChars(text)];
-      if (!chars.length) return;
-      if (chars.length === 1) chars = [chars[0], "", "", ""];
-      else if (chars.length === 2) chars = [chars[0], chars[1], "", ""];
-      else if (chars.length === 3) chars = [chars[0], chars[1], chars[2], ""];
-      chars = chars.slice(0, 4);
+      let chars = [...onlyChars(text)].slice(0, 4);
       while (chars.length < 4) chars.push("");
+      // chars order: [우상, 우하, 좌상, 좌하] after remap from reading order 代表理事
+      // input 代表理事 or 대표이사 → display:
+      //   理 代
+      //   事 表
+      const c0 = chars[0] || "";
+      const c1 = chars[1] || "";
+      const c2 = chars[2] || "";
+      const c3 = chars[3] || "";
+      const layout = [
+        [c2, c0], // top: left=理, right=代
+        [c3, c1], // bottom: left=事, right=表
+      ];
       ctx.fillStyle = INK;
-      ctx.font = `800 ${fontSize}px ${SEAL_FONT}`;
+      ctx.font = `900 ${fontSize}px ${SEAL_FONT}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      const gap = box * 0.42;
-      const pos = [
-        [cx - gap / 2, cy - gap / 2],
-        [cx + gap / 2, cy - gap / 2],
-        [cx - gap / 2, cy + gap / 2],
-        [cx + gap / 2, cy + gap / 2],
-      ];
-      chars.forEach((ch, i) => {
-        if (ch) ctx.fillText(ch, pos[i][0], pos[i][1]);
-      });
+      const gap = box * 0.48;
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 2; c++) {
+          const ch = layout[r][c];
+          if (!ch) continue;
+          const x = cx + (c === 0 ? -gap / 2 : gap / 2);
+          const y = cy + (r === 0 ? -gap / 2 : gap / 2);
+          ctx.fillText(ch, x, y);
+        }
+      }
     }
 
-    function drawCorpCircle(canvas, company, center, size) {
+    const CENTER_HANJA = {
+      대: "代", 표: "表", 이: "理", 사: "事",
+      용: "用", 인: "印", 감: "鑑", 직: "職", 회: "會", 장: "長",
+      使: "使", 用: "用", 認: "認", 印: "印",
+      代: "代", 表: "表", 理: "理", 事: "事",
+    };
+
+    function centerToHanja(text) {
+      const raw = onlyChars(text);
+      if (!raw) return "代表理事";
+      // 이미 한자면 그대로
+      if (/^[\u4e00-\u9fff]+$/.test(raw)) return raw.slice(0, 4);
+      const mapPhrase = {
+        대표이사: "代表理事",
+        사용인감: "使用認印",
+        법인인감: "法人認印",
+        직인: "職印",
+      };
+      if (mapPhrase[raw]) return mapPhrase[raw];
+      return [...raw].map((ch) => CENTER_HANJA[ch] || ch).join("").slice(0, 4);
+    }
+
+    function applyInkTexture(ctx, s) {
+      // 대각선 스크래치 + 노이즈로 실인 느낌
+      const img = ctx.getImageData(0, 0, s, s);
+      const d = img.data;
+      for (let y = 0; y < s; y++) {
+        for (let x = 0; x < s; x++) {
+          const i = (y * s + x) * 4;
+          if (d[i + 3] < 10) continue;
+          const scratch = ((x + y * 1.7) % 7) < 1.2 ? 0.55 : 1;
+          const n = Math.abs(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
+          const noise = 0.72 + n * 0.35;
+          const m = scratch * noise;
+          d[i] = Math.min(255, d[i] * m + (1 - m) * 255 * 0.15);
+          d[i + 1] = Math.min(255, d[i + 1] * m);
+          d[i + 2] = Math.min(255, d[i + 2] * m);
+          d[i + 3] = Math.floor(d[i + 3] * (0.82 + n * 0.18));
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+
+    function drawCorpCircle(canvas, company, center, size, opts) {
       const ctx = canvas.getContext("2d");
       const s = size || canvas.width;
       canvas.width = s;
@@ -557,21 +614,35 @@
       ctx.clearRect(0, 0, s, s);
       const cx = s / 2;
       const cy = s / 2;
-      const outerR = s * 0.46;
-      const innerR = s * 0.28;
+      const outerR = s * 0.455;
+      const innerR = s * 0.275;
+      const useTexture = !opts || opts.texture !== false;
+      const useHanja = !opts || opts.hanja !== false;
+
       ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(2, s * 0.018);
+      ctx.fillStyle = INK;
+      ctx.lineWidth = Math.max(3, s * 0.022);
       ctx.beginPath();
       ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.lineWidth = Math.max(2, s * 0.016);
+      ctx.lineWidth = Math.max(2.5, s * 0.018);
       ctx.beginPath();
       ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
       ctx.stroke();
+
+      const name = onlyChars(company) || "주식회사위캔";
       const ringR = (outerR + innerR) / 2;
-      const ringFont = Math.min(s * 0.085, (2 * Math.PI * ringR) / Math.max(8, onlyChars(company).length) * 0.7);
-      drawRingText(ctx, company, cx, cy, ringR, ringFont);
-      drawCenterGrid(ctx, center || "대표이사", cx, cy, innerR * 1.55, s * 0.13);
+      const ringFont = Math.min(
+        s * 0.078,
+        (2 * Math.PI * ringR) / Math.max(name.length + 1, 6) * 0.78
+      );
+      drawRingText(ctx, name, cx, cy, ringR, ringFont);
+
+      let centerText = onlyChars(center) || "代表理事";
+      if (useHanja) centerText = centerToHanja(centerText);
+      drawCenterGrid(ctx, centerText, cx, cy, innerR * 1.65, s * 0.145);
+
+      if (useTexture) applyInkTexture(ctx, s);
     }
 
     function gridSizeFor(len) {
@@ -676,12 +747,20 @@
       });
     }
 
+    function corpOpts() {
+      return {
+        texture: document.getElementById("inkTexture")?.checked !== false,
+        hanja: document.getElementById("centerHanja")?.checked !== false,
+      };
+    }
+
     function renderCorpShapes() {
       const company = onlyChars(els.company.value) || "주식회사위캔";
-      const center = onlyChars(els.center.value) || "대표이사";
+      const center = onlyChars(els.center.value) || "代表理事";
+      const opts = corpOpts();
       els.corpShapes.innerHTML = "";
       [
-        { key: "circle", label: "원형 법인인감" },
+        { key: "circle", label: "원형 법인인감 (실인)" },
         { key: "square", label: "사각 법인직인" },
       ].forEach((item) => {
         const box = document.createElement("div");
@@ -689,7 +768,7 @@
         const c = document.createElement("canvas");
         c.width = 220;
         c.height = 220;
-        if (item.key === "circle") drawCorpCircle(c, company, center, 220);
+        if (item.key === "circle") drawCorpCircle(c, company, center, 220, opts);
         else drawCorpSquare(c, company, 220);
         box.appendChild(c);
         const span = document.createElement("span");
@@ -724,7 +803,7 @@
           return false;
         }
         if (corpShape === "circle") {
-          drawCorpCircle(els.preview, company, center, 640);
+          drawCorpCircle(els.preview, company, center, 640, corpOpts());
           lastText = `${company}_${center}`;
           els.corpSelLabel.textContent = `원형 법인인감 · ${company} / ${center}`;
         } else {
@@ -763,6 +842,8 @@
     els.name.addEventListener("input", refresh);
     els.company.addEventListener("input", refresh);
     els.center.addEventListener("input", refresh);
+    document.getElementById("inkTexture")?.addEventListener("change", refresh);
+    document.getElementById("centerHanja")?.addEventListener("change", refresh);
     document.getElementById("centerChips").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-center]");
       if (!btn) return;
