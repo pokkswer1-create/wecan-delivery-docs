@@ -414,8 +414,8 @@
       els.client.value = meta.clientDefault;
       els.date.value = meta.dateDefault;
       els.emailHint.textContent = meta.emailConfigured
-        ? "SMTP 설정됨 · 발송 가능"
-        : "SMTP 미설정 · Render Environment에 SMTP_PASS 필요 (PDF는 가능)";
+        ? `발송 가능 (${meta.emailProvider || "설정됨"})`
+        : "이메일 미설정 · 지메일 앱 비밀번호 또는 Resend/Brevo API 키 필요";
 
       els.presets.innerHTML = meta.packages
         .map(

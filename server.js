@@ -43,32 +43,202 @@ function isSmtpReady() {
   );
 }
 
+function isEmailReady() {
+  return Boolean(
+    process.env.RESEND_API_KEY ||
+      process.env.BREVO_API_KEY ||
+      process.env.SENDGRID_API_KEY ||
+      isSmtpReady()
+  );
+}
+
+function emailProviderName() {
+  if (process.env.RESEND_API_KEY) return "resend";
+  if (process.env.BREVO_API_KEY) return "brevo";
+  if (process.env.SENDGRID_API_KEY) return "sendgrid";
+  if (isSmtpReady()) return "smtp";
+  return "none";
+}
+
 function createTransport() {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = String(process.env.SMTP_PASS || "").trim();
   if (!isSmtpReady()) {
-    const missing = [
-      !process.env.SMTP_HOST && "SMTP_HOST",
-      !process.env.SMTP_USER && "SMTP_USER",
-      !pass && "SMTP_PASS",
-    ].filter(Boolean);
-    throw new Error(
-      `이메일 설정이 없습니다. 누락: ${missing.join(", ") || "SMTP_PASS 형식"}. Render Environment를 확인하세요.`
-    );
+    throw new Error("SMTP 설정이 없습니다.");
   }
-  const port = Number(process.env.SMTP_PORT || 465);
-  const secure = String(process.env.SMTP_SECURE || "true") !== "false";
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure = String(process.env.SMTP_SECURE || "false") === "true";
   return nodemailer.createTransport({
     host,
     port,
     secure,
+    requireTLS: !secure && port === 587,
     auth: { user, pass },
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 20000,
     tls: { rejectUnauthorized: false },
   });
+}
+
+function buildMailContent({
+  client,
+  date,
+  titles,
+  totalSum,
+  subject,
+  fileName,
+  filePath,
+  emailTo,
+  emailCc,
+}) {
+  const fromName = "위캔(wecan)";
+  const fromEmail =
+    process.env.MAIL_FROM ||
+    process.env.SMTP_FROM ||
+    process.env.SMTP_USER ||
+    SUPPLIER.email;
+  const replyTo = process.env.MAIL_REPLY_TO || SUPPLIER.email;
+  const mailSubject =
+    subject || `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`;
+  const text = [
+    `${client || DEFAULT_CLIENT} 귀중`,
+    "",
+    "위캔 납품서류를 첨부합니다.",
+    `품목: ${titles}`,
+    `합계(부가세포함): ${fmt(totalSum)}원`,
+    `작성일: ${date || todayISO()}`,
+    "",
+    `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
+    `예금주: ${SUPPLIER.accountHolder}`,
+    `문의: ${SUPPLIER.phone} / ${SUPPLIER.email}`,
+  ].join("\n");
+  const pdfBase64 = fs.readFileSync(filePath).toString("base64");
+  return {
+    fromName,
+    fromEmail,
+    replyTo,
+    mailSubject,
+    text,
+    emailTo,
+    emailCc,
+    fileName,
+    pdfBase64,
+    filePath,
+  };
+}
+
+async function sendViaResend(mail) {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + process.env.RESEND_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: `${mail.fromName} <${mail.fromEmail}>`,
+      to: [mail.emailTo],
+      cc: mail.emailCc ? [mail.emailCc] : undefined,
+      reply_to: mail.replyTo,
+      subject: mail.mailSubject,
+      text: mail.text,
+      attachments: [
+        { filename: mail.fileName, content: mail.pdfBase64 },
+      ],
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.message || body.name || `Resend ${res.status}`);
+  }
+}
+
+async function sendViaBrevo(mail) {
+  const payload = {
+    sender: { name: mail.fromName, email: mail.fromEmail },
+    to: [{ email: mail.emailTo }],
+    replyTo: { email: mail.replyTo },
+    subject: mail.mailSubject,
+    textContent: mail.text,
+    attachment: [{ name: mail.fileName, content: mail.pdfBase64 }],
+  };
+  if (mail.emailCc) payload.cc = [{ email: mail.emailCc }];
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": process.env.BREVO_API_KEY,
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.message || JSON.stringify(body) || `Brevo ${res.status}`);
+  }
+}
+
+async function sendViaSendgrid(mail) {
+  const personalizations = [
+    {
+      to: [{ email: mail.emailTo }],
+      ...(mail.emailCc ? { cc: [{ email: mail.emailCc }] } : {}),
+    },
+  ];
+  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + process.env.SENDGRID_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations,
+      from: { email: mail.fromEmail, name: mail.fromName },
+      reply_to: { email: mail.replyTo },
+      subject: mail.mailSubject,
+      content: [{ type: "text/plain", value: mail.text }],
+      attachments: [
+        {
+          content: mail.pdfBase64,
+          filename: mail.fileName,
+          type: "application/pdf",
+          disposition: "attachment",
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body.slice(0, 300) || `SendGrid ${res.status}`);
+  }
+}
+
+async function sendViaSmtp(mail) {
+  const transporter = createTransport();
+  await transporter.sendMail({
+    from: `"${mail.fromName}" <${mail.fromEmail}>`,
+    to: mail.emailTo,
+    cc: mail.emailCc || undefined,
+    replyTo: mail.replyTo,
+    subject: mail.mailSubject,
+    text: mail.text,
+    attachments: [{ filename: mail.fileName, path: mail.filePath }],
+  });
+}
+
+async function sendDeliveryEmail(opts) {
+  if (!isEmailReady()) {
+    throw new Error(
+      "이메일 설정이 없습니다. RESEND_API_KEY / BREVO_API_KEY / SENDGRID_API_KEY 또는 SMTP를 설정하세요."
+    );
+  }
+  const mail = buildMailContent(opts);
+  if (process.env.RESEND_API_KEY) return sendViaResend(mail);
+  if (process.env.BREVO_API_KEY) return sendViaBrevo(mail);
+  if (process.env.SENDGRID_API_KEY) return sendViaSendgrid(mail);
+  return sendViaSmtp(mail);
 }
 
 app.get("/api/meta", (_req, res) => {
@@ -93,7 +263,8 @@ app.get("/api/meta", (_req, res) => {
         items: sample.items,
       };
     }),
-    emailConfigured: isSmtpReady(),
+    emailConfigured: isEmailReady(),
+    emailProvider: emailProviderName(),
   });
 });
 
@@ -157,40 +328,23 @@ app.post("/api/generate", async (req, res) => {
         return res.status(400).json({ ok: false, error: "받는 이메일 주소를 입력하세요." });
       }
       try {
-        const transporter = createTransport();
-        const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-        await transporter.sendMail({
-          from: `"위캔(wecan)" <${from}>`,
-          to: emailTo,
-          cc: emailCc || undefined,
-          subject:
-            subject ||
-            `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`,
-          text: [
-            `${client || DEFAULT_CLIENT} 귀중`,
-            "",
-            `위캔 납품서류를 첨부합니다.`,
-            `품목: ${titles}`,
-            `합계(부가세포함): ${fmt(totalSum)}원`,
-            `작성일: ${date || todayISO()}`,
-            "",
-            `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
-            `예금주: ${SUPPLIER.accountHolder}`,
-            `문의: ${SUPPLIER.phone} / ${SUPPLIER.email}`,
-          ].join("\n"),
-          attachments: [
-            {
-              filename: fileName,
-              path: result.outPath,
-            },
-          ],
+        await sendDeliveryEmail({
+          client: client || DEFAULT_CLIENT,
+          date: date || todayISO(),
+          titles,
+          totalSum,
+          subject,
+          fileName,
+          filePath: result.outPath,
+          emailTo,
+          emailCc,
         });
         emailed = true;
       } catch (mailErr) {
         console.error("email failed", mailErr);
         emailError =
           mailErr.code === "ETIMEDOUT" || /timeout/i.test(mailErr.message || "")
-            ? "메일 서버 연결 시간 초과(클라우드에서 네이버 SMTP가 막힐 수 있음). PDF는 생성됐습니다."
+            ? "메일 서버 연결 시간 초과. PDF는 생성됐습니다."
             : `메일 발송 실패: ${mailErr.message}. PDF는 생성됐습니다.`;
       }
     }
@@ -226,9 +380,7 @@ app.listen(PORT, "0.0.0.0", () => {
     console.log(`  폰:   http://${ip}:${PORT}`);
   }
   console.log(`  PIN:  ${FORM_PIN}`);
-  if (!process.env.SMTP_USER || !isSmtpReady()) {
-    console.log("  (이메일: .env의 SMTP_PASS 설정 필요)");
-  }
+  console.log(`  EMAIL: ${emailProviderName()}`);
   if (process.env.PUBLIC_URL) {
     console.log(`  공개: ${process.env.PUBLIC_URL}`);
   }
