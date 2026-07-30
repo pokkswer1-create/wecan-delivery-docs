@@ -350,6 +350,43 @@ app.get("/api/presets", (_req, res) => {
   res.json({ ok: true, presets: readPresets() });
 });
 
+const SEAL_PATH = path.join(__dirname, "data", "seal.png");
+
+app.put("/api/seal", (req, res) => {
+  try {
+    const { pin, image } = req.body || {};
+    if (String(pin || "") !== String(FORM_PIN)) {
+      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+    }
+    const m = String(image || "").match(/^data:image\/png;base64,(.+)$/);
+    if (!m) {
+      return res.status(400).json({ ok: false, error: "PNG 도장 이미지가 필요합니다." });
+    }
+    const buf = Buffer.from(m[1], "base64");
+    if (buf.length < 200 || buf.length > 2_000_000) {
+      return res.status(400).json({ ok: false, error: "도장 이미지 크기가 올바르지 않습니다." });
+    }
+    fs.mkdirSync(path.dirname(SEAL_PATH), { recursive: true });
+    fs.writeFileSync(SEAL_PATH, buf);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "도장 저장 실패" });
+  }
+});
+
+app.delete("/api/seal", (req, res) => {
+  try {
+    const { pin } = req.body || {};
+    if (String(pin || "") !== String(FORM_PIN)) {
+      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+    }
+    if (fs.existsSync(SEAL_PATH)) fs.unlinkSync(SEAL_PATH);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "도장 복원 실패" });
+  }
+});
+
 app.put("/api/presets", (req, res) => {
   try {
     const { pin, presets } = req.body || {};

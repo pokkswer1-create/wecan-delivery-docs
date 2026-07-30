@@ -23,6 +23,15 @@ const SUPPLIER = {
 
 const DEFAULT_CLIENT = "";
 
+function sealDataUri() {
+  const custom = path.join(ROOT, "data", "seal.png");
+  if (fs.existsSync(custom)) {
+    const buf = fs.readFileSync(custom);
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  }
+  return assetDataUri("seal_clear.png");
+}
+
 function contactEmail() {
   return (
     process.env.MAIL_FROM ||
@@ -451,7 +460,7 @@ function signHtml() {
       <div>상호 : ${SUPPLIER.name}</div>
       <div>대표자 : ${SUPPLIER.ceo}</div>
     </div>
-    <img class="seal" src="${assetDataUri("seal_clear.png")}" />
+    <img class="seal" src="${sealDataUri()}" />
   </div>
   <div class="footer-bank">
     입금계좌 : ${SUPPLIER.bank} ${SUPPLIER.account} (예금주: ${SUPPLIER.accountHolder})<br/>
