@@ -251,6 +251,7 @@
         <input id="client" type="text" />
         <label for="date">작성일자</label>
         <input id="date" type="date" />
+        <p class="hint">오늘 날짜로 자동 입력됩니다. 필요하면 수정하세요.</p>
       </div>
 
       <div class="card">
@@ -296,6 +297,14 @@
     let meta = null;
     let rows = [];
     let photoPackageIds = [];
+
+    function todayLocal() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
 
     function money(n) {
       return Math.round(Number(n) || 0).toLocaleString("ko-KR");
@@ -413,7 +422,7 @@
       meta = await res.json();
       els.client.value = meta.clientDefault || "";
       els.client.placeholder = "수신처 입력";
-      els.date.value = meta.dateDefault;
+      els.date.value = todayLocal();
       els.emailHint.textContent = meta.emailConfigured
         ? `발송 가능 (${meta.emailProvider || "설정됨"})`
         : "이메일 미설정 · 지메일 앱 비밀번호 또는 Resend/Brevo API 키 필요";
@@ -459,7 +468,7 @@
         customItems,
         photoPackageIds,
         client: els.client.value.trim(),
-        date: els.date.value,
+        date: els.date.value || todayLocal(),
         emailTo: els.emailTo.value.trim(),
         emailCc: els.emailCc.value.trim(),
         subject: els.subject.value.trim(),
