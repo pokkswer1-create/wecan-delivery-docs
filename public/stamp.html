@@ -13,7 +13,7 @@
       --muted: #93a4b8;
       --accent: #1f8a70;
       --accent-2: #f0b429;
-      --stamp: #c62828;
+      --stamp: #e31c23;
       --radius: 14px;
       --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
     }
@@ -29,7 +29,7 @@
         var(--bg);
       padding: 20px 16px 48px;
     }
-    .wrap { max-width: 520px; margin: 0 auto; }
+    .wrap { max-width: 560px; margin: 0 auto; }
     .app-nav {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -108,72 +108,85 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
     }
-    .styles {
+    .picker {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
-    .style-btn {
-      border: 1px solid var(--line);
-      background: #12181f;
-      border-radius: 12px;
-      padding: 10px 6px;
-      color: var(--text);
+    .font-col {
+      background: #fff;
+      border: 2px solid #d8dde5;
+      border-radius: 10px;
+      padding: 8px 6px 10px;
       cursor: pointer;
       text-align: center;
     }
-    .style-btn.active {
+    .font-col.selected {
       border-color: var(--stamp);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--stamp) 40%, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--stamp) 35%, transparent);
     }
-    .style-btn canvas {
-      width: 72px;
-      height: 72px;
-      display: block;
-      margin: 0 auto 6px;
+    .font-col .radio {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #9aa3b2;
+      border-radius: 50%;
+      margin: 0 auto 8px;
+      position: relative;
     }
-    .style-btn span {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
+    .font-col.selected .radio {
+      border-color: var(--stamp);
     }
-    .opts {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-bottom: 12px;
-      font-size: 14px;
-      color: var(--muted);
+    .font-col.selected .radio::after {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      background: var(--stamp);
     }
-    .opts label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .font-col .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .font-col .grid4 button {
+      width: 100%;
+      aspect-ratio: 1;
       margin: 0;
-      color: var(--text);
+      padding: 2px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: #fff;
       cursor: pointer;
     }
-    .opts input { width: auto; margin: 0; }
+    .font-col .grid4 button.on {
+      border-color: var(--stamp);
+      background: #fff5f5;
+    }
+    .font-col .grid4 canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .font-col .fname {
+      color: #222;
+      font-size: 12px;
+      font-weight: 700;
+    }
     .preview-wrap {
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 220px;
-      background:
-        linear-gradient(45deg, #e8e8e8 25%, transparent 25%),
-        linear-gradient(-45deg, #e8e8e8 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, #e8e8e8 75%),
-        linear-gradient(-45deg, transparent 75%, #e8e8e8 75%);
-      background-size: 16px 16px;
-      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-      background-color: #f5f5f5;
+      background: #fff;
       border-radius: 12px;
       margin-bottom: 12px;
+      border: 1px solid var(--line);
     }
     #preview {
-      width: 180px;
-      height: 180px;
+      width: 200px;
+      height: 200px;
       max-width: 100%;
     }
     button {
@@ -221,6 +234,12 @@
       font-size: 13px;
       line-height: 1.7;
     }
+    .sel-label {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      margin: -4px 0 10px;
+    }
   </style>
 </head>
 <body>
@@ -232,22 +251,18 @@
     <header>
       <div class="brand">WECAN</div>
       <h1>온라인 도장</h1>
-      <p>이름을 넣고 스타일을 고른 뒤 도장을 만드세요. PNG로 저장하거나 납품서류에 바로 적용할 수 있습니다.</p>
+      <p>이름을 입력하고 아래 샘플 중 원하는 도장을 고르세요. (잡코리아 스타일)</p>
     </header>
 
     <div class="card">
       <h2>도장 만들기</h2>
-      <label for="name">이름 (예: 김강선)</label>
-      <input id="name" type="text" maxlength="6" placeholder="도장에 새길 이름" value="김강선" />
+      <label for="name">이름</label>
+      <input id="name" type="text" maxlength="4" placeholder="예: 김강선 / 홍길동" value="김강선" />
 
-      <label>도장 모양 · 서체</label>
-      <div class="styles" id="styles"></div>
-
-      <div class="opts">
-        <label><input type="checkbox" id="addIn" checked /> 끝에 「인」 붙이기</label>
-        <label><input type="radio" name="shape" value="circle" checked /> 원형</label>
-        <label><input type="radio" name="shape" value="square" /> 사각</label>
-      </div>
+      <label>도장 모양 선택</label>
+      <p class="hint">서체마다 원형·사각 × 한글·한자 4가지가 있습니다. 원하는 칸을 누르세요.</p>
+      <div class="picker" id="picker"></div>
+      <div class="sel-label" id="selLabel"></div>
 
       <div class="preview-wrap">
         <canvas id="preview" width="512" height="512"></canvas>
@@ -271,25 +286,70 @@
       <h2>이용방법</h2>
       <ol class="steps">
         <li>이름을 입력합니다.</li>
-        <li>서체·원형/사각을 고릅니다.</li>
-        <li>도장 만들기를 누릅니다.</li>
-        <li>이미지 저장 또는 서류에 적용합니다.</li>
+        <li>굴림·궁서·바탕 중 원하는 도장 칸을 고릅니다.</li>
+        <li>도장 만들기 / 저장 / 서류 적용을 합니다.</li>
       </ol>
     </div>
   </div>
 
   <script>
-    const FONTS = {
-      gothic: { label: "고딕체", family: '"Malgun Gothic", "Apple SD Gothic Neo", sans-serif', weight: "800" },
-      batang: { label: "바탕체", family: "Batang, serif", weight: "700" },
-      gungseo: { label: "궁서체", family: "Gungsuh, \"Apple Myungjo\", serif", weight: "700" },
+    const INK = "#e31c23";
+    const FONTS = [
+      {
+        key: "gulim",
+        label: "굴림체",
+        family: 'Gulim, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        weight: "700",
+      },
+      {
+        key: "gungseo",
+        label: "궁서체",
+        family: 'Gungsuh, "Batang", "Apple Myungjo", serif',
+        weight: "700",
+      },
+      {
+        key: "batang",
+        label: "바탕체",
+        family: 'Batang, "Apple Myungjo", serif',
+        weight: "700",
+      },
+    ];
+
+    // 성씨 우선
+    const SURNAME = {
+      김: "金", 이: "李", 박: "朴", 최: "崔", 정: "鄭", 강: "姜", 조: "趙", 윤: "尹",
+      장: "張", 임: "林", 한: "韓", 오: "吳", 서: "徐", 신: "申", 권: "權", 황: "黃",
+      안: "安", 송: "宋", 전: "全", 홍: "洪", 유: "柳", 고: "高", 문: "文", 양: "梁",
+      손: "孫", 배: "裵", 백: "白", 허: "許", 남: "南", 심: "沈", 노: "盧", 하: "河",
+      곽: "郭", 성: "成", 차: "車", 주: "周", 우: "禹", 구: "具", 민: "閔", 류: "柳",
+      진: "陳", 엄: "嚴", 원: "元", 채: "蔡", 천: "千", 방: "方", 공: "孔", 현: "玄",
+      배: "裵", 변: "卞", 마: "馬", 석: "石", 선: "宣", 설: "薛", 염: "廉", 예: "芮",
     };
+
+    // 이름 음절
+    const GIVEN = {
+      강: "康", 선: "善", 길: "吉", 동: "東", 영: "英", 수: "秀", 호: "浩", 준: "俊",
+      현: "賢", 우: "祐", 재: "宰", 석: "錫", 훈: "勳", 태: "泰", 경: "京", 환: "煥",
+      민: "敏", 지: "智", 혜: "慧", 은: "恩", 아: "雅", 연: "姸", 윤: "允", 나: "娜",
+      미: "美", 정: "姃", 희: "喜", 숙: "淑", 순: "順", 철: "哲", 병: "炳", 광: "光",
+      덕: "德", 용: "勇", 규: "圭", 찬: "燦", 혁: "赫", 승: "承", 빈: "彬", 웅: "雄",
+      기: "基", 종: "鍾", 엽: "燁", 범: "範", 근: "根", 형: "炯", 욱: "旭", 일: "一",
+      식: "植", 섭: "燮", 원: "源", 평: "平", 상: "相", 대: "大", 중: "中", 성: "成",
+      진: "眞", 서: "瑞", 하: "夏", 림: "林", 라: "羅", 자: "子", 인: "印", 홍: "弘",
+    };
+
+    const VARIANTS = [
+      { shape: "circle", script: "hangul", title: "원형 한글" },
+      { shape: "square", script: "hangul", title: "사각 한글" },
+      { shape: "circle", script: "hanja", title: "원형 한자" },
+      { shape: "square", script: "hanja", title: "사각 한자" },
+    ];
 
     const els = {
       name: document.getElementById("name"),
-      styles: document.getElementById("styles"),
+      picker: document.getElementById("picker"),
       preview: document.getElementById("preview"),
-      addIn: document.getElementById("addIn"),
+      selLabel: document.getElementById("selLabel"),
       makeBtn: document.getElementById("makeBtn"),
       downloadBtn: document.getElementById("downloadBtn"),
       applyBtn: document.getElementById("applyBtn"),
@@ -298,18 +358,41 @@
       status: document.getElementById("status"),
     };
 
-    let selectedFont = "gothic";
+    let selected = { font: "gulim", shape: "circle", script: "hangul" };
     let lastDataUrl = "";
+    let lastText = "";
 
-    function stampText() {
-      const raw = (els.name.value || "").trim().replace(/\s+/g, "");
-      if (!raw) return "";
-      if (els.addIn.checked && !raw.endsWith("인")) return raw + "인";
-      return raw;
+    function rawName() {
+      return (els.name.value || "").trim().replace(/\s+/g, "").slice(0, 4);
     }
 
-    function shape() {
-      return document.querySelector('input[name="shape"]:checked')?.value || "circle";
+    function hangulStampText() {
+      let n = rawName();
+      if (!n) return "";
+      if (!n.endsWith("인") && n.length < 4) n += "인";
+      return n.slice(0, 4);
+    }
+
+    function toHanjaChar(ch, index) {
+      if (ch === "인") return "印";
+      if (index === 0 && SURNAME[ch]) return SURNAME[ch];
+      if (GIVEN[ch]) return GIVEN[ch];
+      if (SURNAME[ch]) return SURNAME[ch];
+      return ch;
+    }
+
+    function hanjaStampText() {
+      const h = hangulStampText();
+      if (!h) return "";
+      return [...h].map((ch, i) => toHanjaChar(ch, i)).join("");
+    }
+
+    function stampTextFor(script) {
+      return script === "hanja" ? hanjaStampText() : hangulStampText();
+    }
+
+    function fontMeta(key) {
+      return FONTS.find((f) => f.key === key) || FONTS[0];
     }
 
     function drawStamp(canvas, text, fontKey, shapeKind, size) {
@@ -319,104 +402,126 @@
       canvas.height = s;
       ctx.clearRect(0, 0, s, s);
 
-      const ink = "#c62828";
       const cx = s / 2;
       const cy = s / 2;
-      const r = s * 0.42;
-
-      ctx.strokeStyle = ink;
-      ctx.fillStyle = ink;
+      const stroke = Math.max(2, s * 0.045);
+      ctx.strokeStyle = INK;
+      ctx.fillStyle = INK;
+      ctx.lineWidth = stroke;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
       if (shapeKind === "square") {
-        const pad = s * 0.1;
+        const pad = s * 0.08;
         const w = s - pad * 2;
-        ctx.lineWidth = s * 0.028;
-        ctx.strokeRect(pad, pad, w, w);
-        ctx.lineWidth = s * 0.014;
-        const inset = s * 0.045;
-        ctx.strokeRect(pad + inset, pad + inset, w - inset * 2, w - inset * 2);
-      } else {
-        ctx.lineWidth = s * 0.028;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        const r = s * 0.08;
+        roundRect(ctx, pad, pad, w, w, r);
         ctx.stroke();
-        ctx.lineWidth = s * 0.014;
+      } else {
         ctx.beginPath();
-        ctx.arc(cx, cy, r * 0.88, 0, Math.PI * 2);
+        ctx.arc(cx, cy, s * 0.42, 0, Math.PI * 2);
         ctx.stroke();
       }
 
       const chars = [...text];
       if (!chars.length) return;
 
-      const font = FONTS[fontKey] || FONTS.gothic;
-      const n = chars.length;
-      let fontSize;
-      if (n <= 2) fontSize = s * 0.28;
-      else if (n === 3) fontSize = s * 0.22;
-      else if (n === 4) fontSize = s * 0.18;
-      else fontSize = s * 0.14;
-
+      const font = fontMeta(fontKey);
+      // 잡코리아처럼 최대 4자를 2×2로 배치
+      while (chars.length < 4) chars.push("");
+      const show = chars.slice(0, 4);
+      const fontSize = s * (fontKey === "gungseo" ? 0.26 : 0.28);
       ctx.font = `${font.weight} ${fontSize}px ${font.family}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      if (n <= 4) {
-        const lineH = fontSize * 0.95;
-        const startY = cy - ((n - 1) * lineH) / 2;
-        chars.forEach((ch, i) => {
-          ctx.fillText(ch, cx, startY + i * lineH);
-        });
-      } else {
-        const cols = 2;
-        const rows = Math.ceil(n / cols);
-        const lineH = fontSize * 0.95;
-        const colGap = fontSize * 0.95;
-        const startY = cy - ((rows - 1) * lineH) / 2;
-        chars.forEach((ch, i) => {
-          const col = Math.floor(i / rows);
-          const row = i % rows;
-          const x = cx - colGap / 2 + col * colGap;
-          ctx.fillText(ch, x, startY + row * lineH);
-        });
-      }
-    }
-
-    function renderStyles() {
-      els.styles.innerHTML = "";
-      Object.entries(FONTS).forEach(([key, meta]) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "style-btn" + (key === selectedFont ? " active" : "");
-        btn.dataset.font = key;
-        const c = document.createElement("canvas");
-        c.width = 128;
-        c.height = 128;
-        drawStamp(c, "인", key, "circle", 128);
-        btn.appendChild(c);
-        const span = document.createElement("span");
-        span.textContent = meta.label;
-        btn.appendChild(span);
-        btn.addEventListener("click", () => {
-          selectedFont = key;
-          renderStyles();
-          make();
-        });
-        els.styles.appendChild(btn);
+      const gap = s * 0.22;
+      const positions = [
+        [cx - gap / 2, cy - gap / 2],
+        [cx + gap / 2, cy - gap / 2],
+        [cx - gap / 2, cy + gap / 2],
+        [cx + gap / 2, cy + gap / 2],
+      ];
+      show.forEach((ch, i) => {
+        if (!ch) return;
+        ctx.fillText(ch, positions[i][0], positions[i][1] + s * 0.01);
       });
     }
 
-    function make() {
-      const text = stampText();
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function selectionTitle() {
+      const f = fontMeta(selected.font).label;
+      const v = VARIANTS.find(
+        (x) => x.shape === selected.shape && x.script === selected.script
+      );
+      return `${f} · ${v ? v.title : ""}`.trim();
+    }
+
+    function renderPicker() {
+      const sampleHangul = hangulStampText() || "홍길동인";
+      const sampleHanja = hanjaStampText() || "洪吉東印";
+      els.picker.innerHTML = "";
+
+      FONTS.forEach((font) => {
+        const col = document.createElement("div");
+        col.className = "font-col" + (selected.font === font.key ? " selected" : "");
+        col.innerHTML = `<div class="radio"></div><div class="grid4"></div><div class="fname">${font.label}</div>`;
+        const grid = col.querySelector(".grid4");
+
+        VARIANTS.forEach((v) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          const on =
+            selected.font === font.key &&
+            selected.shape === v.shape &&
+            selected.script === v.script;
+          if (on) btn.classList.add("on");
+          const c = document.createElement("canvas");
+          c.width = 128;
+          c.height = 128;
+          const text = v.script === "hanja" ? sampleHanja : sampleHangul;
+          drawStamp(c, text, font.key, v.shape, 128);
+          btn.appendChild(c);
+          btn.title = `${font.label} ${v.title}`;
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selected = { font: font.key, shape: v.shape, script: v.script };
+            renderPicker();
+            make(false);
+          });
+          grid.appendChild(btn);
+        });
+
+        col.addEventListener("click", () => {
+          selected.font = font.key;
+          renderPicker();
+          make(false);
+        });
+        els.picker.appendChild(col);
+      });
+    }
+
+    function make(announce) {
+      const text = stampTextFor(selected.script);
       if (!text) {
         setStatus("err", "이름을 입력하세요.");
-        return;
+        return false;
       }
-      drawStamp(els.preview, text, selectedFont, shape(), 512);
+      drawStamp(els.preview, text, selected.font, selected.shape, 512);
       lastDataUrl = els.preview.toDataURL("image/png");
-      setStatus("", "");
+      lastText = text;
+      els.selLabel.textContent = selectionTitle() + ` · ${text}`;
+      if (announce !== false) setStatus("", "");
+      return true;
     }
 
     function setStatus(kind, msg) {
@@ -424,30 +529,32 @@
       els.status.textContent = msg || "";
     }
 
-    els.makeBtn.addEventListener("click", make);
+    function refreshAll() {
+      renderPicker();
+      make(false);
+    }
+
+    els.makeBtn.addEventListener("click", () => {
+      if (make(true)) setStatus("ok", "도장이 완성되었습니다.");
+    });
+    els.name.addEventListener("input", refreshAll);
     els.name.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        make();
+        els.makeBtn.click();
       }
-    });
-    els.addIn.addEventListener("change", make);
-    document.querySelectorAll('input[name="shape"]').forEach((el) => {
-      el.addEventListener("change", make);
     });
 
     els.downloadBtn.addEventListener("click", () => {
-      if (!lastDataUrl) make();
-      if (!lastDataUrl) return;
+      if (!make(false)) return;
       const a = document.createElement("a");
       a.href = lastDataUrl;
-      a.download = `도장_${stampText() || "stamp"}.png`;
+      a.download = `도장_${lastText || "stamp"}.png`;
       a.click();
     });
 
     els.applyBtn.addEventListener("click", async () => {
-      if (!lastDataUrl) make();
-      if (!lastDataUrl) return;
+      if (!make(false)) return;
       if (!els.pin.value) {
         setStatus("err", "접속 비밀번호를 입력하세요.");
         return;
@@ -460,7 +567,7 @@
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "적용 실패");
-        setStatus("ok", "서류 도장에 적용했습니다. 이제 납품서류를 만들어 보세요.");
+        setStatus("ok", "서류 도장에 적용했습니다.");
       } catch (err) {
         setStatus("err", err.message);
       }
@@ -485,8 +592,7 @@
       }
     });
 
-    renderStyles();
-    make();
+    refreshAll();
   </script>
 </body>
 </html>
