@@ -277,26 +277,90 @@ app.get("/api/meta", (_req, res) => {
     clientDefault: DEFAULT_CLIENT,
     dateDefault: todayISO(),
     supplierEmail: process.env.MAIL_FROM || process.env.SMTP_FROM || SUPPLIER.email,
-    packages: PACKAGE_TEMPLATES.map((t) => {
-      const sample =
-        t.id === "3_지주대임대"
-          ? t.build({
-              dailyIncl: t.defaultDailyIncl,
-              days: t.defaultDays,
-            })
-          : t.build(t.defaultTotalIncl);
-      return {
-        id: t.id,
-        title: t.title,
-        defaultTotalIncl: t.defaultTotalIncl || null,
-        defaultDailyIncl: t.defaultDailyIncl || null,
-        defaultDays: t.defaultDays || null,
-        items: sample.items,
-      };
-    }),
+    packages: readPresets().map((p) => ({
+      id: p.id,
+      title: p.title,
+      items: [
+        {
+          name: p.name,
+          spec: p.spec || "",
+          unit: p.unit || "식",
+          qty: Number(p.qty) || 1,
+          unitPriceIncl: Number(p.unitPriceIncl) || 0,
+        },
+      ],
+    })),
     emailConfigured: isEmailReady(),
     emailProvider: emailProviderName(),
   });
+});
+
+const PRESETS_PATH = path.join(__dirname, "data", "presets.json");
+
+function defaultPresetsFromPackages() {
+  return PACKAGE_TEMPLATES.map((t) => {
+    const sample =
+      t.id === "3_지주대임대"
+        ? t.build({ dailyIncl: t.defaultDailyIncl, days: t.defaultDays })
+        : t.build(t.defaultTotalIncl);
+    const it = sample.items[0];
+    return {
+      id: t.id,
+      title: t.title,
+      name: it.name,
+      spec: it.spec || "",
+      unit: it.unit || "식",
+      qty: it.qty || 1,
+      unitPriceIncl: it.unitPriceIncl || 0,
+    };
+  });
+}
+
+function readPresets() {
+  try {
+    const raw = fs.readFileSync(PRESETS_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+  } catch (_) {
+    /* use defaults */
+  }
+  return defaultPresetsFromPackages();
+}
+
+function writePresets(list) {
+  fs.mkdirSync(path.dirname(PRESETS_PATH), { recursive: true });
+  fs.writeFileSync(PRESETS_PATH, JSON.stringify(list, null, 2), "utf8");
+}
+
+app.get("/api/presets", (_req, res) => {
+  res.json({ ok: true, presets: readPresets() });
+});
+
+app.put("/api/presets", (req, res) => {
+  try {
+    const { pin, presets } = req.body || {};
+    if (String(pin || "") !== String(FORM_PIN)) {
+      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+    }
+    if (!Array.isArray(presets)) {
+      return res.status(400).json({ ok: false, error: "presets 배열이 필요합니다." });
+    }
+    const cleaned = presets
+      .map((p, i) => ({
+        id: String(p.id || `custom_${Date.now()}_${i}`),
+        title: String(p.title || p.name || "").trim(),
+        name: String(p.name || p.title || "").trim(),
+        spec: String(p.spec || "").trim(),
+        unit: String(p.unit || "식").trim() || "식",
+        qty: Number(p.qty) > 0 ? Number(p.qty) : 1,
+        unitPriceIncl: Number(p.unitPriceIncl) || 0,
+      }))
+      .filter((p) => p.title && p.name);
+    writePresets(cleaned);
+    res.json({ ok: true, presets: cleaned });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "저장 실패" });
+  }
 });
 
 app.post("/api/generate", async (req, res) => {

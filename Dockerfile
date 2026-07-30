@@ -9,8 +9,9 @@ RUN npm install --omit=dev
 COPY generate.js pdf.js server.js ./
 COPY public ./public
 COPY assets ./assets
+COPY data ./data
 
-RUN mkdir -p out tmp && chown -R pptruser:pptruser /app
+RUN mkdir -p out tmp data && chown -R pptruser:pptruser /app
 
 USER pptruser
 
