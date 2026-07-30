@@ -40,7 +40,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-30-history-fix";
+const APP_VERSION = "2026-07-30-mail-clean";
 
 app.get("/stamp", (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -153,32 +153,26 @@ function buildMailContent({
     `합계(부가세포함): ${fmt(totalSum)}원`,
     `작성일: ${date || todayISO()}`,
     "",
-  ];
-  if (receiptUrl) {
-    textLines.push(
-      "【수신확인】 아래 링크로 PDF를 받으시면 수신확인이 완료됩니다.",
-      receiptUrl,
-      ""
-    );
-  }
-  textLines.push(
-    "(첨부 PDF도 함께 보내드립니다.)",
-    "",
     `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
     `예금주: ${SUPPLIER.accountHolder}`,
-    `문의: ${SUPPLIER.phone} / ${fromEmail}`
-  );
+    `문의: ${SUPPLIER.phone} / ${fromEmail}`,
+  ];
   const text = textLines.join("\n");
-  const html = [
+  const htmlParts = [
     `<p>${client || DEFAULT_CLIENT} 귀중</p>`,
     `<p>위캔 납품서류를 보내드립니다.</p>`,
     `<p>품목: ${titles}<br>합계(부가세포함): ${fmt(totalSum)}원<br>작성일: ${date || todayISO()}</p>`,
-    receiptUrl
-      ? `<p style="margin:20px 0"><a href="${receiptUrl}" style="display:inline-block;padding:12px 18px;background:#1f8a70;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">PDF 받고 수신확인</a></p><p style="font-size:13px;color:#555">링크: ${receiptUrl}</p>`
-      : "",
-    `<p style="font-size:13px;color:#555">첨부 PDF도 함께 보내드립니다.</p>`,
-    `<p>입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}<br>예금주: ${SUPPLIER.accountHolder}<br>문의: ${SUPPLIER.phone} / ${fromEmail}</p>`,
-  ].join("");
+  ];
+  // 수신확인용 다운로드 버튼만 (긴 URL·안내문구는 본문에 노출하지 않음)
+  if (receiptUrl) {
+    htmlParts.push(
+      `<p style="margin:18px 0"><a href="${receiptUrl}" style="display:inline-block;padding:12px 18px;background:#1f8a70;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">PDF 다운로드</a></p>`
+    );
+  }
+  htmlParts.push(
+    `<p>입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}<br>예금주: ${SUPPLIER.accountHolder}<br>문의: ${SUPPLIER.phone} / ${fromEmail}</p>`
+  );
+  const html = htmlParts.join("");
   const pdfBase64 = fs.readFileSync(filePath).toString("base64");
   return {
     fromName,
