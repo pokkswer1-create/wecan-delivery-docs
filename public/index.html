@@ -411,7 +411,8 @@
     async function loadMeta() {
       const res = await fetch("/api/meta");
       meta = await res.json();
-      els.client.value = meta.clientDefault;
+      els.client.value = meta.clientDefault || "";
+      els.client.placeholder = "수신처 입력";
       els.date.value = meta.dateDefault;
       els.emailHint.textContent = meta.emailConfigured
         ? `발송 가능 (${meta.emailProvider || "설정됨"})`

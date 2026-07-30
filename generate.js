@@ -21,7 +21,7 @@ const SUPPLIER = {
   accountHolder: "김강선(위캔(wecan))",
 };
 
-const DEFAULT_CLIENT = "대한배구협회";
+const DEFAULT_CLIENT = "";
 
 function fmt(n) {
   return Math.round(n).toLocaleString("ko-KR");
@@ -64,11 +64,10 @@ const PACKAGE_TEMPLATES = [
     defaultTotalIncl: 4800000,
     photos: ["photo_referee.png"],
     build(totalIncl) {
-      const man = Math.round(totalIncl / 10000);
       return {
         id: this.id,
         title: this.title,
-        fileName: `1_심판대_${man}만원_납품서류.pdf`,
+        fileName: `1_심판대_납품서류.pdf`,
         totalIncl,
         items: [
           {
@@ -90,11 +89,10 @@ const PACKAGE_TEMPLATES = [
     defaultTotalIncl: 3960000,
     photos: ["photo_cover.png"],
     build(totalIncl) {
-      const man = Math.round(totalIncl / 10000);
       return {
         id: this.id,
         title: this.title,
-        fileName: `2_지주커버_${man}만원_납품서류.pdf`,
+        fileName: `2_지주커버_납품서류.pdf`,
         totalIncl,
         items: [
           {
@@ -118,11 +116,10 @@ const PACKAGE_TEMPLATES = [
     photos: ["photo_posts_box.png"],
     build({ dailyIncl, days }) {
       const totalIncl = dailyIncl * days;
-      const man = Math.round(totalIncl / 10000);
       return {
         id: this.id,
         title: this.title,
-        fileName: `3_지주대_임대_${man}만원_납품서류.pdf`,
+        fileName: `3_지주대_임대_납품서류.pdf`,
         totalIncl,
         items: [
           {
@@ -144,11 +141,10 @@ const PACKAGE_TEMPLATES = [
     defaultTotalIncl: 25000,
     photos: [],
     build(totalIncl) {
-      const man = Math.round(totalIncl / 10000);
       return {
         id: this.id,
         title: this.title,
-        fileName: `4_전사유니폼상의_${man}만원_납품서류.pdf`,
+        fileName: `4_전사유니폼상의_납품서류.pdf`,
         totalIncl,
         items: [
           {
@@ -170,11 +166,10 @@ const PACKAGE_TEMPLATES = [
     defaultTotalIncl: 20000,
     photos: [],
     build(totalIncl) {
-      const man = Math.round(totalIncl / 10000);
       return {
         id: this.id,
         title: this.title,
-        fileName: `5_전사유니폼하의_${man}만원_납품서류.pdf`,
+        fileName: `5_전사유니폼하의_납품서류.pdf`,
         totalIncl,
         items: [
           {
@@ -196,11 +191,10 @@ const PACKAGE_TEMPLATES = [
     defaultTotalIncl: 40000,
     photos: [],
     build(totalIncl) {
-      const man = Math.round(totalIncl / 10000);
       return {
         id: this.id,
         title: this.title,
-        fileName: `6_전사유니폼세트_${man}만원_납품서류.pdf`,
+        fileName: `6_전사유니폼세트_납품서류.pdf`,
         totalIncl,
         items: [
           {
@@ -602,7 +596,6 @@ function resolvePackages(selection = {}) {
     });
     const totalIncl = items.reduce((s, it) => s + it.unitPriceIncl * it.qty, 0);
     const title = String(selection.title || "납품").trim() || "납품";
-    const man = Math.round(totalIncl / 10000);
     const safeTitle = title.replace(/[\\/:*?"<>|]/g, "_");
     const photoSet = new Set();
     for (const id of selection.photoPackageIds || []) {
@@ -613,7 +606,7 @@ function resolvePackages(selection = {}) {
       {
         id: "custom",
         title,
-        fileName: `위캔_${safeTitle}_${man}만원_납품서류.pdf`,
+        fileName: `위캔_${safeTitle}_납품서류.pdf`,
         totalIncl,
         items,
         photos: [...photoSet],
