@@ -37,7 +37,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-30-corp-seal";
+const APP_VERSION = "2026-07-30-presets-persist";
 
 app.get("/stamp", (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -305,7 +305,7 @@ app.get("/api/meta", (_req, res) => {
     clientDefault: DEFAULT_CLIENT,
     dateDefault: todayISO(),
     supplierEmail: process.env.MAIL_FROM || process.env.SMTP_FROM || SUPPLIER.email,
-    packages: readPresets().map((p) => ({
+    packages: readPresets().presets.map((p) => ({
       id: p.id,
       title: p.title,
       items: [
@@ -348,20 +348,69 @@ function readPresets() {
   try {
     const raw = fs.readFileSync(PRESETS_PATH, "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length) return parsed;
+    if (Array.isArray(parsed) && parsed.length) {
+      return { updatedAt: null, presets: parsed };
+    }
+    if (parsed && Array.isArray(parsed.presets) && parsed.presets.length) {
+      return {
+        updatedAt: parsed.updatedAt || null,
+        presets: parsed.presets,
+      };
+    }
   } catch (_) {
     /* use defaults */
   }
-  return defaultPresetsFromPackages();
+  return { updatedAt: null, presets: defaultPresetsFromPackages() };
 }
 
 function writePresets(list) {
   fs.mkdirSync(path.dirname(PRESETS_PATH), { recursive: true });
-  fs.writeFileSync(PRESETS_PATH, JSON.stringify(list, null, 2), "utf8");
+  const payload = {
+    updatedAt: new Date().toISOString(),
+    presets: list,
+  };
+  fs.writeFileSync(PRESETS_PATH, JSON.stringify(payload, null, 2), "utf8");
+  return payload;
 }
 
+app.post("/api/auth", (req, res) => {
+  const { pin } = req.body || {};
+  if (String(pin || "") !== String(FORM_PIN)) {
+    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+  }
+  res.json({ ok: true });
+});
+
 app.get("/api/presets", (_req, res) => {
-  res.json({ ok: true, presets: readPresets() });
+  const data = readPresets();
+  res.json({ ok: true, updatedAt: data.updatedAt, presets: data.presets });
+});
+
+app.put("/api/presets", (req, res) => {
+  try {
+    const { pin, presets } = req.body || {};
+    if (String(pin || "") !== String(FORM_PIN)) {
+      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+    }
+    if (!Array.isArray(presets)) {
+      return res.status(400).json({ ok: false, error: "presets 배열이 필요합니다." });
+    }
+    const cleaned = presets
+      .map((p, i) => ({
+        id: String(p.id || `custom_${Date.now()}_${i}`),
+        title: String(p.title || p.name || "").trim(),
+        name: String(p.name || p.title || "").trim(),
+        spec: String(p.spec || "").trim(),
+        unit: String(p.unit || "식").trim() || "식",
+        qty: Number(p.qty) > 0 ? Number(p.qty) : 1,
+        unitPriceIncl: Number(p.unitPriceIncl) || 0,
+      }))
+      .filter((p) => p.title && p.name);
+    const saved = writePresets(cleaned);
+    res.json({ ok: true, updatedAt: saved.updatedAt, presets: cleaned });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "저장 실패" });
+  }
 });
 
 const SEAL_PATH = path.join(__dirname, "data", "seal.png");
@@ -398,33 +447,6 @@ app.delete("/api/seal", (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "도장 복원 실패" });
-  }
-});
-
-app.put("/api/presets", (req, res) => {
-  try {
-    const { pin, presets } = req.body || {};
-    if (String(pin || "") !== String(FORM_PIN)) {
-      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-    }
-    if (!Array.isArray(presets)) {
-      return res.status(400).json({ ok: false, error: "presets 배열이 필요합니다." });
-    }
-    const cleaned = presets
-      .map((p, i) => ({
-        id: String(p.id || `custom_${Date.now()}_${i}`),
-        title: String(p.title || p.name || "").trim(),
-        name: String(p.name || p.title || "").trim(),
-        spec: String(p.spec || "").trim(),
-        unit: String(p.unit || "식").trim() || "식",
-        qty: Number(p.qty) > 0 ? Number(p.qty) : 1,
-        unitPriceIncl: Number(p.unitPriceIncl) || 0,
-      }))
-      .filter((p) => p.title && p.name);
-    writePresets(cleaned);
-    res.json({ ok: true, presets: cleaned });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message || "저장 실패" });
   }
 });
 

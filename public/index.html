@@ -265,6 +265,8 @@
         <h2>접속</h2>
         <label for="pin">비밀번호</label>
         <input id="pin" type="password" autocomplete="current-password" required />
+        <button class="ghost" type="button" id="unlockBtn" style="margin-top:0">비밀번호 확인 · 품목 불러오기</button>
+        <div class="status" id="unlockStatus"></div>
       </div>
 
       <div class="card">
@@ -274,20 +276,23 @@
         <textarea id="note" placeholder="비우면 자동 생성"></textarea>
       </div>
 
-      <div class="card">
+      <div class="card" id="navCard">
         <h2>품목 네비게이션</h2>
-        <p class="hint">아래 버튼 = 메뉴입니다. 등록/수정/삭제로 이 버튼들을 직접 관리하세요.</p>
-        <div class="presets" id="presets"></div>
-        <p class="hint">버튼을 누르면 이번 서류에 품목이 추가됩니다.</p>
-        <button class="ghost" type="button" id="toggleManage">메뉴 편집 닫기</button>
-        <div id="manageBox" style="margin-top:12px">
-          <p class="hint">여기 목록이 곧 위 버튼 메뉴입니다. 금액도 여기서 정한 뒤 저장하세요.</p>
-          <div id="catalog"></div>
-          <div class="btn-row">
-            <button class="ghost" type="button" id="addCatalog">+ 메뉴 등록</button>
-            <button class="primary" type="button" id="saveCatalog">메뉴 저장</button>
+        <p class="hint" id="navLockHint">위 비밀번호를 확인하면 저장된 품목 메뉴가 나타납니다.</p>
+        <div id="navUnlocked" class="hidden">
+          <p class="hint">아래 버튼 = 메뉴입니다. 등록/수정/삭제 후 <strong>메뉴 저장</strong>을 누르면 이 폰에 계속 남습니다.</p>
+          <div class="presets" id="presets"></div>
+          <p class="hint">버튼을 누르면 이번 서류에 품목이 추가됩니다.</p>
+          <button class="ghost" type="button" id="toggleManage">메뉴 편집 닫기</button>
+          <div id="manageBox" style="margin-top:12px">
+            <p class="hint">여기 목록이 곧 위 버튼 메뉴입니다. 금액도 여기서 정한 뒤 저장하세요.</p>
+            <div id="catalog"></div>
+            <div class="btn-row">
+              <button class="ghost" type="button" id="addCatalog">+ 메뉴 등록</button>
+              <button class="primary" type="button" id="saveCatalog">메뉴 저장</button>
+            </div>
+            <div class="status" id="catalogStatus"></div>
           </div>
-          <div class="status" id="catalogStatus"></div>
         </div>
       </div>
 
@@ -330,7 +335,9 @@
   </div>
 
   <script>
-    const STORAGE_KEY = "wecan_presets_v1";
+    const STORAGE_KEY = "wecan_presets_v2";
+    const STORAGE_META = "wecan_presets_meta_v2";
+    const UNLOCK_KEY = "wecan_unlocked_v1";
     const els = {
       presets: document.getElementById("presets"),
       catalog: document.getElementById("catalog"),
@@ -339,6 +346,10 @@
       addCatalog: document.getElementById("addCatalog"),
       saveCatalog: document.getElementById("saveCatalog"),
       catalogStatus: document.getElementById("catalogStatus"),
+      unlockBtn: document.getElementById("unlockBtn"),
+      unlockStatus: document.getElementById("unlockStatus"),
+      navLockHint: document.getElementById("navLockHint"),
+      navUnlocked: document.getElementById("navUnlocked"),
       items: document.getElementById("items"),
       addItem: document.getElementById("addItem"),
       docTitle: document.getElementById("docTitle"),
@@ -528,20 +539,77 @@
       els.status.innerHTML = html;
     }
 
+    function readLocalBundle() {
+      try {
+        const presets = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+        const meta = JSON.parse(localStorage.getItem(STORAGE_META) || "null");
+        if (Array.isArray(presets) && presets.length) {
+          return {
+            presets,
+            updatedAt: (meta && meta.updatedAt) || null,
+            saved: Boolean(meta && meta.saved),
+          };
+        }
+      } catch (_) {}
+      // 이전 키 마이그레이션
+      try {
+        const legacy = JSON.parse(localStorage.getItem("wecan_presets_v1") || "[]");
+        if (Array.isArray(legacy) && legacy.length) {
+          return { presets: legacy, updatedAt: null, saved: true };
+        }
+      } catch (_) {}
+      return { presets: [], updatedAt: null, saved: false };
+    }
+
+    function writeLocalBundle(presets, updatedAt) {
+      const at = updatedAt || new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+      localStorage.setItem(
+        STORAGE_META,
+        JSON.stringify({ saved: true, updatedAt: at })
+      );
+    }
+
+    function setNavUnlocked(on) {
+      els.navUnlocked.classList.toggle("hidden", !on);
+      els.navLockHint.classList.toggle("hidden", on);
+      if (on) localStorage.setItem(UNLOCK_KEY, "1");
+    }
+
+    function showUnlockStatus(type, text) {
+      els.unlockStatus.className = "status show " + type;
+      els.unlockStatus.textContent = text;
+    }
+
     async function loadCatalog() {
-      let list = [];
+      const local = readLocalBundle();
+      let server = { presets: [], updatedAt: null };
       try {
         const res = await fetch("/api/presets");
         const data = await res.json();
-        if (data.ok && Array.isArray(data.presets)) list = data.presets;
-      } catch (_) {}
-      if (!list.length) {
-        try {
-          list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-        } catch (_) {
-          list = [];
+        if (data.ok && Array.isArray(data.presets)) {
+          server = { presets: data.presets, updatedAt: data.updatedAt || null };
         }
+      } catch (_) {}
+
+      let list = [];
+      let updatedAt = null;
+      // 이 폰에 저장한 메뉴가 있으면 우선 유지 (서버 기본값으로 덮어쓰지 않음)
+      if (local.saved && local.presets.length) {
+        const localTs = local.updatedAt ? Date.parse(local.updatedAt) : 0;
+        const serverTs = server.updatedAt ? Date.parse(server.updatedAt) : 0;
+        if (server.updatedAt && serverTs > localTs && server.presets.length) {
+          list = server.presets;
+          updatedAt = server.updatedAt;
+        } else {
+          list = local.presets;
+          updatedAt = local.updatedAt || new Date().toISOString();
+        }
+      } else if (server.presets.length) {
+        list = server.presets;
+        updatedAt = server.updatedAt;
       }
+
       if (!list.length) {
         const meta = await fetch("/api/meta").then((r) => r.json());
         list = (meta.packages || []).map((p) => ({
@@ -554,10 +622,35 @@
           unitPriceIncl: (p.items && p.items[0] && p.items[0].unitPriceIncl) || 0,
         }));
       }
+
       catalog = list;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(catalog));
+      // 이미 사용자가 저장한 경우에만 로컬 유지. 기본값만 받은 경우엔 saved 플래그 안 씀
+      if (local.saved || (server.updatedAt && server.presets.length)) {
+        writeLocalBundle(catalog, updatedAt || new Date().toISOString());
+      }
       renderPresetButtons();
       renderCatalogEditor();
+    }
+
+    async function unlockAndLoad() {
+      if (!els.pin.value) {
+        showUnlockStatus("err", "비밀번호를 입력하세요.");
+        return;
+      }
+      try {
+        const res = await fetch("/api/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: els.pin.value }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "비밀번호가 올바르지 않습니다.");
+        setNavUnlocked(true);
+        await loadCatalog();
+        showUnlockStatus("ok", "확인됨 · 저장된 품목 메뉴를 불러왔습니다.");
+      } catch (err) {
+        showUnlockStatus("err", err.message);
+      }
     }
 
     async function init() {
@@ -567,11 +660,23 @@
       els.emailHint.textContent = meta.emailConfigured
         ? `발송 가능 (${meta.emailProvider || "설정됨"})`
         : "이메일 미설정";
-      await loadCatalog();
       rows = [blankRow()];
       renderRows();
       els.emailTo.required = els.sendEmail.checked;
+      // 이전에 잠금 해제한 적 있어도, 비밀번호 다시 확인 후 품목 표시
+      setNavUnlocked(false);
+      if (localStorage.getItem(UNLOCK_KEY) === "1" && els.pin.value) {
+        await unlockAndLoad();
+      }
     }
+
+    els.unlockBtn.addEventListener("click", () => unlockAndLoad());
+    els.pin.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        unlockAndLoad();
+      }
+    });
 
     els.toggleManage.addEventListener("click", () => {
       els.manageBox.classList.toggle("hidden");
@@ -602,7 +707,8 @@
         if (!p.name) p.name = p.title;
       });
       catalog = cleaned;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(catalog));
+      const now = new Date().toISOString();
+      writeLocalBundle(catalog, now);
       renderPresetButtons();
       renderCatalogEditor();
       try {
@@ -614,12 +720,12 @@
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "저장 실패");
         catalog = data.presets;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(catalog));
+        writeLocalBundle(catalog, data.updatedAt || now);
         renderPresetButtons();
         renderCatalogEditor();
-        showCatalogStatus("ok", "네비게이션 메뉴 저장 완료 · 위 버튼이 갱신됐습니다");
+        showCatalogStatus("ok", "메뉴 저장 완료 · 이 폰에 계속 보관됩니다");
       } catch (err) {
-        showCatalogStatus("err", err.message + " (이 폰에는 임시 저장됨)");
+        showCatalogStatus("ok", "이 폰에 저장됨 (서버 동기화 실패: " + err.message + ")");
       }
     });
 
