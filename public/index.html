@@ -247,16 +247,17 @@
       </div>
 
       <div class="card">
-        <h2>기본 품목</h2>
-        <p class="hint">버튼을 누르면 아래 서류 품목에 추가됩니다.</p>
+        <h2>품목 네비게이션</h2>
+        <p class="hint">아래 버튼 = 메뉴입니다. 등록/수정/삭제로 이 버튼들을 직접 관리하세요.</p>
         <div class="presets" id="presets"></div>
-        <button class="ghost" type="button" id="toggleManage">품목 등록/수정/삭제</button>
-        <div id="manageBox" class="hidden" style="margin-top:12px">
-          <p class="hint">이름·금액 수정 후 저장하세요. (비밀번호 필요)</p>
+        <p class="hint">버튼을 누르면 이번 서류에 품목이 추가됩니다.</p>
+        <button class="ghost" type="button" id="toggleManage">메뉴 편집 닫기</button>
+        <div id="manageBox" style="margin-top:12px">
+          <p class="hint">여기 목록이 곧 위 버튼 메뉴입니다. 금액도 여기서 정한 뒤 저장하세요.</p>
           <div id="catalog"></div>
           <div class="btn-row">
-            <button class="ghost" type="button" id="addCatalog">+ 등록</button>
-            <button class="primary" type="button" id="saveCatalog">저장</button>
+            <button class="ghost" type="button" id="addCatalog">+ 메뉴 등록</button>
+            <button class="primary" type="button" id="saveCatalog">메뉴 저장</button>
           </div>
           <div class="status" id="catalogStatus"></div>
         </div>
@@ -428,12 +429,12 @@
         .map(
           (p, i) => `<div class="cat-item" data-id="${escapeAttr(p.id)}">
             <div class="top">
-              <strong>등록 ${i + 1}</strong>
+              <strong>메뉴 ${i + 1}</strong>
               <button type="button" class="del" data-cat-del="${i}">삭제</button>
             </div>
-            <label>버튼 이름</label>
+            <label>메뉴 버튼 이름 (네비게이션에 표시)</label>
             <input class="c-title" type="text" value="${escapeAttr(p.title)}" placeholder="예: 전사 유니폼 상의" />
-            <label>품명(서류)</label>
+            <label>서류 품명</label>
             <input class="c-name" type="text" value="${escapeAttr(p.name)}" placeholder="예: 전사 유니폼 상의" />
             <label>규격/설명</label>
             <input class="c-spec" type="text" value="${escapeAttr(p.spec)}" />
@@ -546,20 +547,26 @@
 
     els.toggleManage.addEventListener("click", () => {
       els.manageBox.classList.toggle("hidden");
-      els.toggleManage.textContent = els.manageBox.classList.contains("hidden")
-        ? "품목 등록/수정/삭제"
-        : "관리 닫기";
+      const closed = els.manageBox.classList.contains("hidden");
+      els.toggleManage.textContent = closed
+        ? "네비게이션 등록 · 수정 · 삭제"
+        : "메뉴 편집 닫기";
     });
     els.addCatalog.addEventListener("click", () => {
       readCatalogFromDom();
       catalog.push(blankCatalog());
       renderCatalogEditor();
+      els.manageBox.classList.remove("hidden");
     });
     els.saveCatalog.addEventListener("click", async () => {
       readCatalogFromDom();
       const cleaned = catalog.filter((p) => p.title || p.name);
       if (!cleaned.length) {
-        showCatalogStatus("err", "품목을 1개 이상 등록하세요.");
+        showCatalogStatus("err", "메뉴를 1개 이상 등록하세요.");
+        return;
+      }
+      if (!els.pin.value) {
+        showCatalogStatus("err", "위에 접속 비밀번호를 먼저 입력하세요.");
         return;
       }
       cleaned.forEach((p) => {
@@ -582,7 +589,7 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(catalog));
         renderPresetButtons();
         renderCatalogEditor();
-        showCatalogStatus("ok", "품목 저장 완료");
+        showCatalogStatus("ok", "네비게이션 메뉴 저장 완료 · 위 버튼이 갱신됐습니다");
       } catch (err) {
         showCatalogStatus("err", err.message + " (이 폰에는 임시 저장됨)");
       }

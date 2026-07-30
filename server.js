@@ -19,7 +19,21 @@ const FORM_PIN = process.env.FORM_PIN || "515050";
 const app = express();
 
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use((req, res, next) => {
+  if (req.path === "/" || req.path.endsWith(".html")) {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname, "public"), {
+  etag: false,
+  lastModified: false,
+  setHeaders(res, filePath) {
+    if (filePath.endsWith(".html")) {
+      res.set("Cache-Control", "no-store");
+    }
+  },
+}));
 app.use("/downloads", express.static(OUT));
 
 function lanAddresses() {
