@@ -128,7 +128,7 @@ function buildMailContent({
     "",
     `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
     `예금주: ${SUPPLIER.accountHolder}`,
-    `문의: ${SUPPLIER.phone} / ${mail.fromEmail}`,
+    `문의: ${SUPPLIER.phone} / ${fromEmail}`,
   ].join("\n");
   const pdfBase64 = fs.readFileSync(filePath).toString("base64");
   return {
