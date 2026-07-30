@@ -32,6 +32,30 @@
       padding: 20px 16px 40px;
     }
     .wrap { max-width: 520px; margin: 0 auto; }
+    .app-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 16px;
+      padding: 4px;
+      background: #12181f;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .app-nav a {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+      padding: 11px 8px;
+      border-radius: 9px;
+    }
+    .app-nav a.active {
+      background: color-mix(in srgb, var(--accent) 28%, #1a222c);
+      color: var(--text);
+    }
     header { margin-bottom: 18px; }
     header .brand {
       font-size: 13px;
@@ -226,10 +250,14 @@
 </head>
 <body>
   <div class="wrap">
+    <nav class="app-nav" aria-label="주요 메뉴">
+      <a class="active" href="/" aria-current="page">납품서류</a>
+      <a href="/stamp.html">온라인 도장</a>
+    </nav>
     <header>
       <div class="brand">WECAN</div>
       <h1>납품서류 만들기</h1>
-      <p>기본 품목을 등록·수정·삭제하고, 불러와 서류를 만드세요. · <a href="/stamp.html" style="color:var(--accent-2);font-weight:600;text-decoration:none">온라인 도장</a></p>
+      <p>기본 품목을 등록·수정·삭제하고, 불러와 서류를 만드세요.</p>
     </header>
 
     <form id="form">

@@ -30,17 +30,29 @@
       padding: 20px 16px 48px;
     }
     .wrap { max-width: 520px; margin: 0 auto; }
-    .nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 14px;
-      font-size: 13px;
+    .app-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 16px;
+      padding: 4px;
+      background: #12181f;
+      border: 1px solid var(--line);
+      border-radius: 12px;
     }
-    .nav a {
-      color: var(--accent-2);
+    .app-nav a {
+      display: block;
+      text-align: center;
       text-decoration: none;
-      font-weight: 600;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+      padding: 11px 8px;
+      border-radius: 9px;
+    }
+    .app-nav a.active {
+      background: color-mix(in srgb, var(--accent) 28%, #1a222c);
+      color: var(--text);
     }
     header .brand {
       font-size: 13px;
@@ -213,10 +225,10 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="nav">
-      <a href="/">← 납품서류</a>
-      <span style="color:var(--muted)">온라인 도장</span>
-    </div>
+    <nav class="app-nav" aria-label="주요 메뉴">
+      <a href="/">납품서류</a>
+      <a class="active" href="/stamp.html" aria-current="page">온라인 도장</a>
+    </nav>
     <header>
       <div class="brand">WECAN</div>
       <h1>온라인 도장</h1>

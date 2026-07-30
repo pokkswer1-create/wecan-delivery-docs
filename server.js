@@ -36,6 +36,19 @@ app.use(express.static(path.join(__dirname, "public"), {
 }));
 app.use("/downloads", express.static(OUT));
 
+const PUBLIC_DIR = path.join(__dirname, "public");
+const APP_VERSION = "2026-07-30-nav-stamp";
+
+app.get("/stamp", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(PUBLIC_DIR, "stamp.html"));
+});
+
+app.get("/stamp.html", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(PUBLIC_DIR, "stamp.html"));
+});
+
 function lanAddresses() {
   const nets = os.networkInterfaces();
   const list = [];
@@ -288,6 +301,7 @@ async function sendDeliveryEmail(opts) {
 
 app.get("/api/meta", (_req, res) => {
   res.json({
+    version: APP_VERSION,
     clientDefault: DEFAULT_CLIENT,
     dateDefault: todayISO(),
     supplierEmail: process.env.MAIL_FROM || process.env.SMTP_FROM || SUPPLIER.email,
