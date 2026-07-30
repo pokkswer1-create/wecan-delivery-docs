@@ -15,7 +15,7 @@ const {
 } = require("./generate");
 
 const PORT = Number(process.env.PORT || 3780);
-const FORM_PIN = process.env.FORM_PIN || "wecan2026";
+const FORM_PIN = process.env.FORM_PIN || "515050";
 const app = express();
 
 app.use(express.json({ limit: "1mb" }));
