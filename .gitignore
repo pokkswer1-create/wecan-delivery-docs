@@ -3,10 +3,13 @@ tmp/
 out/
 .env
 data/seal.png
+data/mail-log.json
+data/receipts/
 _smtp_pass.txt
 _gmail_pass.txt
 _fix_smtp.js
 _set_*.js
+_deploy_render.js
 *.log
 .DS_Store
 _regen_tmp.js

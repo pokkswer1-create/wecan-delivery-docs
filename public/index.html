@@ -34,7 +34,7 @@
     .wrap { max-width: 520px; margin: 0 auto; }
     .app-nav {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 6px;
       margin-bottom: 16px;
       padding: 4px;
@@ -47,9 +47,9 @@
       text-align: center;
       text-decoration: none;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
-      padding: 11px 8px;
+      padding: 11px 6px;
       border-radius: 9px;
     }
     .app-nav a.active {
@@ -252,7 +252,8 @@
   <div class="wrap">
     <nav class="app-nav" aria-label="주요 메뉴">
       <a class="active" href="/" aria-current="page">납품서류</a>
-      <a href="/stamp.html">온라인 도장</a>
+      <a href="/history.html">발송이력</a>
+      <a href="/stamp.html">도장</a>
     </nav>
     <header>
       <div class="brand">WECAN</div>
@@ -774,9 +775,15 @@
           [
             `완료: ${data.fileName}`,
             `합계: ${money(data.totalSum)}원`,
-            data.emailed ? "이메일 발송 완료" : data.emailError || "이메일 미발송 (다운로드만)",
+            data.emailed
+              ? "이메일 발송 완료 · 상대가 수신확인 링크로 받으면 이력이 갱신됩니다"
+              : data.emailError || "이메일 미발송 (다운로드만)",
+            data.receiptUrl ? `수신확인 링크: ${data.receiptUrl}` : "",
             `<a href="${data.downloadUrl}" download>PDF 다운로드</a>`,
-          ].join("\n")
+            `<a href="/history.html">발송 이력 보기</a>`,
+          ]
+            .filter(Boolean)
+            .join("\n")
         );
       } catch (err) {
         showStatus("err", err.message || String(err));

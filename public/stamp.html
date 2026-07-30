@@ -40,15 +40,18 @@
       border: 1px solid var(--line);
       border-radius: 12px;
     }
+    .app-nav {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
     .app-nav a, .mode-nav button {
       display: block;
       width: 100%;
       text-align: center;
       text-decoration: none;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
-      padding: 11px 8px;
+      padding: 11px 6px;
       border-radius: 9px;
       border: 0;
       background: transparent;
@@ -288,7 +291,8 @@
   <div class="wrap">
     <nav class="app-nav" aria-label="주요 메뉴">
       <a href="/">납품서류</a>
-      <a class="active" href="/stamp.html" aria-current="page">온라인 도장</a>
+      <a href="/history.html">발송이력</a>
+      <a class="active" href="/stamp.html" aria-current="page">도장</a>
     </nav>
     <header>
       <div class="brand">WECAN</div>

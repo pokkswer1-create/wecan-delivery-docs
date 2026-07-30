@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>발송 이력 · 위캔</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --line: #2c3848;
+      --text: #eef3f8;
+      --muted: #93a4b8;
+      --accent: #1f8a70;
+      --accent-2: #f0b429;
+      --ok: #3ecf8e;
+      --danger: #e35d6a;
+      --radius: 14px;
+      --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #1d3a33 0%, transparent 55%),
+        radial-gradient(900px 400px at 100% 0%, #2a2416 0%, transparent 50%),
+        var(--bg);
+      padding: 20px 16px 40px;
+    }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    .app-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 16px;
+      padding: 4px;
+      background: #12181f;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .app-nav a {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 11px 6px;
+      border-radius: 9px;
+    }
+    .app-nav a.active {
+      background: color-mix(in srgb, var(--accent) 28%, #1a222c);
+      color: var(--text);
+    }
+    header .brand {
+      font-size: 13px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: 6px;
+    }
+    header h1 { margin: 0; font-size: 26px; font-weight: 800; }
+    header p { margin: 8px 0 18px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+    .card {
+      background: color-mix(in srgb, var(--panel) 92%, white 8%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input[type="password"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #12181f;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 16px;
+      margin-bottom: 10px;
+      outline: none;
+      font-family: inherit;
+    }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      margin-bottom: 8px;
+      background: linear-gradient(180deg, #2aa889, var(--accent));
+      color: #fff;
+    }
+    button.ghost {
+      background: #12181f;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.45; }
+    .status { min-height: 18px; font-size: 13px; margin-top: 4px; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: #12181f;
+    }
+    .item .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+    .item strong { font-size: 14px; }
+    .badge {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 8px;
+      border-radius: 999px;
+    }
+    .badge.sent {
+      background: color-mix(in srgb, var(--accent-2) 20%, #12181f);
+      color: var(--accent-2);
+    }
+    .badge.received {
+      background: color-mix(in srgb, var(--ok) 22%, #12181f);
+      color: var(--ok);
+    }
+    .meta { font-size: 12px; color: var(--muted); line-height: 1.55; }
+    .meta a { color: var(--accent-2); }
+    .empty { text-align: center; color: var(--muted); padding: 24px 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="app-nav" aria-label="주요 메뉴">
+      <a href="/">납품서류</a>
+      <a class="active" href="/history.html" aria-current="page">발송이력</a>
+      <a href="/stamp.html">도장</a>
+    </nav>
+    <header>
+      <div class="brand">WECAN</div>
+      <h1>발송 이력</h1>
+      <p>메일 발송과 <strong style="color:var(--ok)">수신확인(PDF 다운로드)</strong>을 확인합니다. 상대가 수신확인 링크로 PDF를 받으면 확정됩니다.</p>
+    </header>
+
+    <div class="card">
+      <h2>접속</h2>
+      <label for="pin">비밀번호</label>
+      <input id="pin" type="password" autocomplete="current-password" />
+      <button type="button" id="loadBtn">이력 불러오기</button>
+      <button class="ghost" type="button" id="refreshBtn">새로고침</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="card">
+      <h2>목록</h2>
+      <p class="hint">수신확인 = 상대가 메일 속 「PDF 받고 수신확인」 링크로 다운로드한 경우만 표시됩니다. 첨부파일만 연 경우는 추적되지 않습니다.</p>
+      <div id="list" class="empty">비밀번호를 입력하고 불러오세요.</div>
+    </div>
+  </div>
+
+  <script>
+    const els = {
+      pin: document.getElementById("pin"),
+      loadBtn: document.getElementById("loadBtn"),
+      refreshBtn: document.getElementById("refreshBtn"),
+      status: document.getElementById("status"),
+      list: document.getElementById("list"),
+    };
+
+    function setStatus(kind, msg) {
+      els.status.className = "status" + (kind ? " " + kind : "");
+      els.status.textContent = msg || "";
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return "-";
+      try {
+        return new Date(iso).toLocaleString("ko-KR");
+      } catch (_) {
+        return iso;
+      }
+    }
+
+    function money(n) {
+      return Math.round(Number(n) || 0).toLocaleString("ko-KR");
+    }
+
+    async function load() {
+      if (!els.pin.value) {
+        setStatus("err", "비밀번호를 입력하세요.");
+        return;
+      }
+      setStatus("", "불러오는 중…");
+      try {
+        const res = await fetch("/api/mail-log?pin=" + encodeURIComponent(els.pin.value));
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "불러오기 실패");
+        const items = data.items || [];
+        if (!items.length) {
+          els.list.className = "empty";
+          els.list.textContent = "아직 발송 이력이 없습니다.";
+          setStatus("ok", "0건");
+          return;
+        }
+        els.list.className = "";
+        els.list.innerHTML = items
+          .map((e) => {
+            const confirmed = e.receiptConfirmed;
+            return `<div class="item">
+              <div class="top">
+                <strong>${escapeHtml(e.subject || e.titles || "납품서류")}</strong>
+                <span class="badge ${confirmed ? "received" : "sent"}">${confirmed ? "수신확인" : "발송됨"}</span>
+              </div>
+              <div class="meta">
+                받는 사람: ${escapeHtml(e.to)}<br>
+                발송: ${fmtTime(e.sentAt)}<br>
+                수신확인(다운로드): ${confirmed ? fmtTime(e.downloadedAt) : "아직 없음"}
+                ${e.downloadCount ? ` · ${e.downloadCount}회` : ""}<br>
+                합계: ${money(e.totalSum)}원
+                ${e.receiptUrl ? `<br><a href="${escapeAttr(e.receiptUrl)}" target="_blank" rel="noopener">수신확인 링크</a>` : ""}
+              </div>
+            </div>`;
+          })
+          .join("");
+        const okCount = items.filter((x) => x.receiptConfirmed).length;
+        setStatus("ok", `${items.length}건 · 수신확인 ${okCount}건`);
+      } catch (err) {
+        setStatus("err", err.message);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    function escapeAttr(s) {
+      return escapeHtml(s);
+    }
+
+    els.loadBtn.addEventListener("click", load);
+    els.refreshBtn.addEventListener("click", load);
+    els.pin.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        load();
+      }
+    });
+  </script>
+</body>
+</html>

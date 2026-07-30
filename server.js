@@ -3,6 +3,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const {
   SUPPLIER,
@@ -16,6 +17,8 @@ const {
 
 const PORT = Number(process.env.PORT || 3780);
 const FORM_PIN = process.env.FORM_PIN || "515050";
+const RECEIPTS_DIR = path.join(__dirname, "data", "receipts");
+const MAIL_LOG_PATH = path.join(__dirname, "data", "mail-log.json");
 const app = express();
 
 app.use(express.json({ limit: "1mb" }));
@@ -37,7 +40,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-30-corp-default";
+const APP_VERSION = "2026-07-30-mail-receipt";
 
 app.get("/stamp", (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -47,6 +50,16 @@ app.get("/stamp", (_req, res) => {
 app.get("/stamp.html", (_req, res) => {
   res.set("Cache-Control", "no-store");
   res.sendFile(path.join(PUBLIC_DIR, "stamp.html"));
+});
+
+app.get("/history", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(PUBLIC_DIR, "history.html"));
+});
+
+app.get("/history.html", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(PUBLIC_DIR, "history.html"));
 });
 
 function lanAddresses() {
@@ -121,6 +134,7 @@ function buildMailContent({
   filePath,
   emailTo,
   emailCc,
+  receiptUrl,
 }) {
   const fromName = "위캔(wecan)";
   const fromEmail =
@@ -131,18 +145,40 @@ function buildMailContent({
   const replyTo = process.env.MAIL_REPLY_TO || fromEmail;
   const mailSubject =
     subject || `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`;
-  const text = [
+  const textLines = [
     `${client || DEFAULT_CLIENT} 귀중`,
     "",
-    "위캔 납품서류를 첨부합니다.",
+    "위캔 납품서류를 보내드립니다.",
     `품목: ${titles}`,
     `합계(부가세포함): ${fmt(totalSum)}원`,
     `작성일: ${date || todayISO()}`,
     "",
+  ];
+  if (receiptUrl) {
+    textLines.push(
+      "【수신확인】 아래 링크로 PDF를 받으시면 수신확인이 완료됩니다.",
+      receiptUrl,
+      ""
+    );
+  }
+  textLines.push(
+    "(첨부 PDF도 함께 보내드립니다.)",
+    "",
     `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
     `예금주: ${SUPPLIER.accountHolder}`,
-    `문의: ${SUPPLIER.phone} / ${fromEmail}`,
-  ].join("\n");
+    `문의: ${SUPPLIER.phone} / ${fromEmail}`
+  );
+  const text = textLines.join("\n");
+  const html = [
+    `<p>${client || DEFAULT_CLIENT} 귀중</p>`,
+    `<p>위캔 납품서류를 보내드립니다.</p>`,
+    `<p>품목: ${titles}<br>합계(부가세포함): ${fmt(totalSum)}원<br>작성일: ${date || todayISO()}</p>`,
+    receiptUrl
+      ? `<p style="margin:20px 0"><a href="${receiptUrl}" style="display:inline-block;padding:12px 18px;background:#1f8a70;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">PDF 받고 수신확인</a></p><p style="font-size:13px;color:#555">링크: ${receiptUrl}</p>`
+      : "",
+    `<p style="font-size:13px;color:#555">첨부 PDF도 함께 보내드립니다.</p>`,
+    `<p>입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}<br>예금주: ${SUPPLIER.accountHolder}<br>문의: ${SUPPLIER.phone} / ${fromEmail}</p>`,
+  ].join("");
   const pdfBase64 = fs.readFileSync(filePath).toString("base64");
   return {
     fromName,
@@ -150,12 +186,49 @@ function buildMailContent({
     replyTo,
     mailSubject,
     text,
+    html,
     emailTo,
     emailCc,
     fileName,
     pdfBase64,
     filePath,
+    receiptUrl,
   };
+}
+
+function readMailLog() {
+  try {
+    const raw = fs.readFileSync(MAIL_LOG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeMailLog(list) {
+  fs.mkdirSync(path.dirname(MAIL_LOG_PATH), { recursive: true });
+  fs.writeFileSync(MAIL_LOG_PATH, JSON.stringify(list, null, 2), "utf8");
+}
+
+function upsertMailLog(entry) {
+  const list = readMailLog();
+  const idx = list.findIndex((x) => x.id === entry.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+  else list.unshift(entry);
+  writeMailLog(list.slice(0, 500));
+  return entry;
+}
+
+function findMailLog(id) {
+  return readMailLog().find((x) => x.id === id) || null;
+}
+
+function publicBase(req) {
+  if (process.env.PUBLIC_URL) return String(process.env.PUBLIC_URL).replace(/\/$/, "");
+  const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+  const host = req.get("x-forwarded-host") || req.get("host");
+  return `${proto}://${host}`;
 }
 
 async function sendViaGas(mail) {
@@ -168,6 +241,7 @@ async function sendViaGas(mail) {
       cc: mail.emailCc || "",
       subject: mail.mailSubject,
       text: mail.text,
+      html: mail.html,
       fileName: mail.fileName,
       pdfBase64: mail.pdfBase64,
       fromName: mail.fromName,
@@ -200,6 +274,7 @@ async function sendViaResend(mail) {
       reply_to: mail.replyTo,
       subject: mail.mailSubject,
       text: mail.text,
+      html: mail.html,
       attachments: [
         { filename: mail.fileName, content: mail.pdfBase64 },
       ],
@@ -218,6 +293,7 @@ async function sendViaBrevo(mail) {
     replyTo: { email: mail.replyTo },
     subject: mail.mailSubject,
     textContent: mail.text,
+    htmlContent: mail.html,
     attachment: [{ name: mail.fileName, content: mail.pdfBase64 }],
   };
   if (mail.emailCc) payload.cc = [{ email: mail.emailCc }];
@@ -255,7 +331,10 @@ async function sendViaSendgrid(mail) {
       from: { email: mail.fromEmail, name: mail.fromName },
       reply_to: { email: mail.replyTo },
       subject: mail.mailSubject,
-      content: [{ type: "text/plain", value: mail.text }],
+      content: [
+        { type: "text/plain", value: mail.text },
+        { type: "text/html", value: mail.html },
+      ],
       attachments: [
         {
           content: mail.pdfBase64,
@@ -281,6 +360,7 @@ async function sendViaSmtp(mail) {
     replyTo: mail.replyTo,
     subject: mail.mailSubject,
     text: mail.text,
+    html: mail.html,
     attachments: [{ filename: mail.fileName, path: mail.filePath }],
   });
 }
@@ -505,11 +585,20 @@ app.post("/api/generate", async (req, res) => {
 
     let emailed = false;
     let emailError = "";
+    let receiptId = "";
+    let receiptUrl = "";
     if (sendEmail) {
       if (!emailTo) {
         return res.status(400).json({ ok: false, error: "받는 이메일 주소를 입력하세요." });
       }
       try {
+        receiptId = crypto.randomBytes(16).toString("hex");
+        fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+        const receiptPath = path.join(RECEIPTS_DIR, `${receiptId}.pdf`);
+        fs.copyFileSync(result.outPath, receiptPath);
+        receiptUrl = `${publicBase(req)}/r/${receiptId}`;
+        const mailSubject =
+          subject || `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`;
         await sendDeliveryEmail({
           client: client || DEFAULT_CLIENT,
           date: date || todayISO(),
@@ -520,8 +609,24 @@ app.post("/api/generate", async (req, res) => {
           filePath: result.outPath,
           emailTo,
           emailCc,
+          receiptUrl,
         });
         emailed = true;
+        upsertMailLog({
+          id: receiptId,
+          to: emailTo,
+          cc: emailCc || "",
+          subject: mailSubject,
+          titles,
+          totalSum,
+          fileName,
+          client: client || DEFAULT_CLIENT,
+          sentAt: new Date().toISOString(),
+          status: "sent",
+          downloadedAt: null,
+          downloadCount: 0,
+          receiptUrl,
+        });
       } catch (mailErr) {
         console.error("email failed", mailErr);
         emailError =
@@ -537,6 +642,8 @@ app.post("/api/generate", async (req, res) => {
       downloadUrl,
       emailed,
       emailError,
+      receiptId,
+      receiptUrl,
       packages: result.packages.map((p) => ({
         id: p.id,
         title: p.title,
@@ -553,7 +660,60 @@ app.post("/api/generate", async (req, res) => {
   }
 });
 
+app.get("/r/:id", (req, res) => {
+  try {
+    const id = String(req.params.id || "").replace(/[^a-f0-9]/gi, "");
+    if (!id) return res.status(404).send("링크가 올바르지 않습니다.");
+    const filePath = path.join(RECEIPTS_DIR, `${id}.pdf`);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send("서류를 찾을 수 없습니다. 링크가 만료되었을 수 있습니다.");
+    }
+    const entry = findMailLog(id);
+    const now = new Date().toISOString();
+    upsertMailLog({
+      ...(entry || { id, fileName: `${id}.pdf`, to: "", subject: "" }),
+      id,
+      downloadedAt: (entry && entry.downloadedAt) || now,
+      downloadCount: Number((entry && entry.downloadCount) || 0) + 1,
+      lastDownloadAt: now,
+      status: "received",
+      receiptConfirmed: true,
+    });
+    const name = (entry && entry.fileName) || `납품서류_${id}.pdf`;
+    res.download(filePath, name);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("다운로드 중 오류가 발생했습니다.");
+  }
+});
+
+app.get("/api/mail-log", (req, res) => {
+  const pin = req.query.pin || req.headers["x-form-pin"];
+  if (String(pin || "") !== String(FORM_PIN)) {
+    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+  }
+  const list = readMailLog().map((e) => ({
+    id: e.id,
+    to: e.to,
+    cc: e.cc || "",
+    subject: e.subject,
+    titles: e.titles || "",
+    totalSum: e.totalSum || 0,
+    fileName: e.fileName,
+    client: e.client || "",
+    sentAt: e.sentAt,
+    downloadedAt: e.downloadedAt || null,
+    downloadCount: e.downloadCount || 0,
+    lastDownloadAt: e.lastDownloadAt || null,
+    status: e.downloadedAt || e.receiptConfirmed ? "received" : e.status || "sent",
+    receiptConfirmed: Boolean(e.downloadedAt || e.receiptConfirmed),
+    receiptUrl: e.receiptUrl || "",
+  }));
+  res.json({ ok: true, items: list });
+});
+
 fs.mkdirSync(OUT, { recursive: true });
+fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`위캔 납품서류 웹폼 실행 중`);
