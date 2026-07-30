@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument } = require("pdf-lib");
-const { htmlToPdf, assetDataUri } = require("./pdf");
+const { htmlToPdf, htmlToPdfMany, assetDataUri } = require("./pdf");
 
 const ROOT = __dirname;
 const OUT = path.join(ROOT, "out");
@@ -255,6 +255,7 @@ const PACKAGES = PACKAGE_TEMPLATES.map((t) => {
 });
 
 function fontHead() {
+  // display=swap + preconnect 유지, 각 PDF마다 networkidle 대기는 pdf.js에서 제거함
   return `<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">`;
@@ -270,6 +271,8 @@ function docCss() {
     color: #111;
     font-size: 11px;
   }
+  .sheet { page-break-after: always; }
+  .sheet:last-child { page-break-after: auto; }
   .page { width: 100%; }
   h1 {
     text-align: center;
@@ -468,7 +471,7 @@ function signHtml() {
   </div>`;
 }
 
-function makeDocHtml(pkg, docType, ctx) {
+function makeDocSheet(pkg, docType, ctx) {
   const titles = {
     quote: "견 적 서",
     delivery: "납 품 서",
@@ -481,37 +484,62 @@ function makeDocHtml(pkg, docType, ctx) {
   };
   const totalForDisplay = pkg.totalIncl;
 
+  return `
+  <div class="sheet">
+    <div class="page">
+      <h1>${titles[docType]}</h1>
+      <div class="meta">
+        ${clientBoxHtml(ctx)}
+        ${supplierBoxHtml()}
+      </div>
+      <div class="receiver">${ctx.client} 귀중</div>
+      <div class="amount-line">
+        일금 <strong>${koreanAmount(totalForDisplay)}</strong>
+        &nbsp;&nbsp;(₩ ${fmt(totalForDisplay)}) &nbsp;&nbsp;※ 부가세 포함
+      </div>
+      <div>${intros[docType]}</div>
+      ${itemsTableHtml(pkg)}
+      ${totalsHtml(pkg)}
+      <div class="notes">
+        <h4>참고사항</h4>
+        <div>1. ${pkg.note}</div>
+        <div>2. 작성일자: ${ctx.dateKr}</div>
+        <div>3. 문서종류: ${titles[docType]} / 품목: ${pkg.title}</div>
+      </div>
+      ${signHtml()}
+    </div>
+  </div>`;
+}
+
+function makeDocHtml(pkg, docType, ctx) {
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8"/>
-<title>${titles[docType]} - ${pkg.title}</title>
+<title>${pkg.title}</title>
 ${fontHead()}
 <style>${docCss()}</style>
 </head>
 <body>
-  <div class="page">
-    <h1>${titles[docType]}</h1>
-    <div class="meta">
-      ${clientBoxHtml(ctx)}
-      ${supplierBoxHtml()}
-    </div>
-    <div class="receiver">${ctx.client} 귀중</div>
-    <div class="amount-line">
-      일금 <strong>${koreanAmount(totalForDisplay)}</strong>
-      &nbsp;&nbsp;(₩ ${fmt(totalForDisplay)}) &nbsp;&nbsp;※ 부가세 포함
-    </div>
-    <div>${intros[docType]}</div>
-    ${itemsTableHtml(pkg)}
-    ${totalsHtml(pkg)}
-    <div class="notes">
-      <h4>참고사항</h4>
-      <div>1. ${pkg.note}</div>
-      <div>2. 작성일자: ${ctx.dateKr}</div>
-      <div>3. 문서종류: ${titles[docType]} / 품목: ${pkg.title}</div>
-    </div>
-    ${signHtml()}
-  </div>
+  ${makeDocSheet(pkg, docType, ctx)}
+</body>
+</html>`;
+}
+
+/** 견적+납품+명세를 한 번에 PDF로 (Puppeteer 호출 1회) */
+function makeTripleDocHtml(pkg, ctx) {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<title>${pkg.title} 납품서류</title>
+${fontHead()}
+<style>${docCss()}</style>
+</head>
+<body>
+  ${makeDocSheet(pkg, "quote", ctx)}
+  ${makeDocSheet(pkg, "delivery", ctx)}
+  ${makeDocSheet(pkg, "statement", ctx)}
 </body>
 </html>`;
 }
@@ -575,26 +603,47 @@ async function mergePdfs(paths, outPath) {
   fs.writeFileSync(outPath, await merged.save());
 }
 
+let bizBankCachePaths = null;
+
 async function writeBizBankPdfs(dir) {
-  const bizHtml = path.join(dir, "04_biz.html");
-  const bizPdf = path.join(dir, "04_biz.pdf");
+  const cacheDir = path.join(TMP, "_bizbank_cache");
+  const bizPdfCached = path.join(cacheDir, "04_biz.pdf");
+  const bankPdfCached = path.join(cacheDir, "05_bank.pdf");
+
+  if (
+    bizBankCachePaths &&
+    fs.existsSync(bizBankCachePaths[0]) &&
+    fs.existsSync(bizBankCachePaths[1])
+  ) {
+    return bizBankCachePaths;
+  }
+  if (fs.existsSync(bizPdfCached) && fs.existsSync(bankPdfCached)) {
+    bizBankCachePaths = [bizPdfCached, bankPdfCached];
+    return bizBankCachePaths;
+  }
+
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const bizHtml = path.join(cacheDir, "04_biz.html");
+  const bankHtml = path.join(cacheDir, "05_bank.html");
   fs.writeFileSync(
     bizHtml,
     makeEmbedImageHtml("biz_reg.png", "사업자등록증"),
     "utf8"
   );
-  await htmlToPdf(bizHtml, bizPdf);
-
-  const bankHtml = path.join(dir, "05_bank.html");
-  const bankPdf = path.join(dir, "05_bank.pdf");
   fs.writeFileSync(
     bankHtml,
     makeEmbedImageHtml("bank.png", "사업자통장 (계좌개설확인서)"),
     "utf8"
   );
-  await htmlToPdf(bankHtml, bankPdf);
-
-  return [bizPdf, bankPdf];
+  await htmlToPdfMany(
+    [
+      { html: bizHtml, pdf: bizPdfCached },
+      { html: bankHtml, pdf: bankPdfCached },
+    ],
+    2
+  );
+  bizBankCachePaths = [bizPdfCached, bankPdfCached];
+  return bizBankCachePaths;
 }
 
 function resolveCtx(options = {}) {
@@ -607,7 +656,6 @@ function resolveCtx(options = {}) {
 }
 
 function resolvePackages(selection = {}) {
-  // 자유 입력 품목
   if (Array.isArray(selection.customItems) && selection.customItems.length > 0) {
     const items = selection.customItems.map((it, i) => {
       const name = String(it.name || "").trim();
@@ -683,34 +731,33 @@ async function buildPackage(pkg, options = {}) {
 
   const parts = [];
   const includeBizBank = options.includeBizBank !== false;
+  const jobs = [];
 
-  for (const [key, type] of [
-    ["01_quote", "quote"],
-    ["02_delivery", "delivery"],
-    ["03_statement", "statement"],
-  ]) {
-    const html = path.join(dir, `${key}.html`);
-    const pdf = path.join(dir, `${key}.pdf`);
-    fs.writeFileSync(html, makeDocHtml(pkg, type, ctx), "utf8");
-    await htmlToPdf(html, pdf);
-    parts.push(pdf);
-  }
+  const docsHtml = path.join(dir, "01_03_docs.html");
+  const docsPdf = path.join(dir, "01_03_docs.pdf");
+  fs.writeFileSync(docsHtml, makeTripleDocHtml(pkg, ctx), "utf8");
+  jobs.push({ html: docsHtml, pdf: docsPdf, part: "docs" });
 
-  if (includeBizBank) {
-    parts.push(...(await writeBizBankPdfs(dir)));
-  }
-
+  let photoPdf = null;
   if (pkg.photos && pkg.photos.length) {
     const html = path.join(dir, "06_photos.html");
-    const pdf = path.join(dir, "06_photos.pdf");
+    photoPdf = path.join(dir, "06_photos.pdf");
     fs.writeFileSync(
       html,
       makeImageHtml(pkg.photos, `${pkg.title} 관련 사진`),
       "utf8"
     );
-    await htmlToPdf(html, pdf);
-    parts.push(pdf);
+    jobs.push({ html, pdf: photoPdf, part: "photos" });
   }
+
+  const [bizBank] = await Promise.all([
+    includeBizBank ? writeBizBankPdfs(dir) : Promise.resolve([]),
+    htmlToPdfMany(jobs, 2),
+  ]);
+
+  parts.push(docsPdf);
+  if (includeBizBank) parts.push(...bizBank);
+  if (photoPdf) parts.push(photoPdf);
 
   const outPath = path.join(OUT, pkg.fileName);
   await mergePdfs(parts, outPath);
@@ -723,22 +770,17 @@ async function buildCombined(packages, options = {}) {
   fs.mkdirSync(dir, { recursive: true });
   fs.mkdirSync(OUT, { recursive: true });
   const parts = [];
+  const jobs = [];
 
   for (const pkg of packages) {
     const pkgDir = path.join(TMP, pkg.id);
     fs.mkdirSync(pkgDir, { recursive: true });
 
-    for (const [key, type] of [
-      ["01_quote", "quote"],
-      ["02_delivery", "delivery"],
-      ["03_statement", "statement"],
-    ]) {
-      const html = path.join(pkgDir, `${key}.html`);
-      const pdf = path.join(pkgDir, `${key}.pdf`);
-      fs.writeFileSync(html, makeDocHtml(pkg, type, ctx), "utf8");
-      await htmlToPdf(html, pdf);
-      parts.push(pdf);
-    }
+    const docsHtml = path.join(pkgDir, "01_03_docs.html");
+    const docsPdf = path.join(pkgDir, "01_03_docs.pdf");
+    fs.writeFileSync(docsHtml, makeTripleDocHtml(pkg, ctx), "utf8");
+    jobs.push({ html: docsHtml, pdf: docsPdf });
+    parts.push(docsPdf);
 
     if (pkg.photos && pkg.photos.length) {
       const photoHtml = path.join(pkgDir, "06_photos.html");
@@ -748,12 +790,16 @@ async function buildCombined(packages, options = {}) {
         makeImageHtml(pkg.photos, `${pkg.title} 관련 사진`),
         "utf8"
       );
-      await htmlToPdf(photoHtml, photoPdf);
+      jobs.push({ html: photoHtml, pdf: photoPdf });
       parts.push(photoPdf);
     }
   }
 
-  parts.push(...(await writeBizBankPdfs(dir)));
+  const [, bizBank] = await Promise.all([
+    htmlToPdfMany(jobs, 2),
+    writeBizBankPdfs(dir),
+  ]);
+  parts.push(...bizBank);
 
   const titles = packages.map((p) => p.title).join("_");
   const fileName = `위캔_납품서류_통합_${titles.replace(/\s+/g, "")}.pdf`;

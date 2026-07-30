@@ -40,7 +40,7 @@ app.use(express.static(path.join(__dirname, "public"), {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-30-json-safe";
+const APP_VERSION = "2026-07-31-pdf-fast";
 
 app.get("/stamp", (_req, res) => {
   res.set("Cache-Control", "no-store");
@@ -745,4 +745,7 @@ app.listen(PORT, "0.0.0.0", () => {
   if (process.env.PUBLIC_URL) {
     console.log(`  공개: ${process.env.PUBLIC_URL}`);
   }
+  try {
+    require("./pdf").warmBrowser();
+  } catch (_) {}
 });
