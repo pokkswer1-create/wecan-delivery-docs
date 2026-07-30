@@ -2,6 +2,9 @@ node_modules/
 tmp/
 out/
 .env
+_smtp_pass.txt
+_fix_smtp.js
+_set_*.js
 *.log
 .DS_Store
 _regen_tmp.js

@@ -34,7 +34,7 @@ function lanAddresses() {
 }
 
 function isSmtpReady() {
-  const pass = process.env.SMTP_PASS || "";
+  const pass = String(process.env.SMTP_PASS || "").trim();
   return Boolean(
     process.env.SMTP_HOST &&
       process.env.SMTP_USER &&
@@ -46,16 +46,21 @@ function isSmtpReady() {
 function createTransport() {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const pass = String(process.env.SMTP_PASS || "").trim();
   if (!isSmtpReady()) {
+    const missing = [
+      !process.env.SMTP_HOST && "SMTP_HOST",
+      !process.env.SMTP_USER && "SMTP_USER",
+      !pass && "SMTP_PASS",
+    ].filter(Boolean);
     throw new Error(
-      "이메일 설정이 없습니다. .env에 SMTP_HOST / SMTP_USER / SMTP_PASS를 넣어주세요."
+      `이메일 설정이 없습니다. 누락: ${missing.join(", ") || "SMTP_PASS 형식"}. Render Environment를 확인하세요.`
     );
   }
   return nodemailer.createTransport({
     host,
     port: Number(process.env.SMTP_PORT || 465),
-    secure: process.env.SMTP_SECURE !== "false",
+    secure: String(process.env.SMTP_SECURE || "true") !== "false",
     auth: { user, pass },
   });
 }
