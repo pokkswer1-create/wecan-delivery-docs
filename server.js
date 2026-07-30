@@ -45,7 +45,8 @@ function isSmtpReady() {
 
 function isEmailReady() {
   return Boolean(
-    process.env.RESEND_API_KEY ||
+    process.env.GAS_MAIL_URL ||
+      process.env.RESEND_API_KEY ||
       process.env.BREVO_API_KEY ||
       process.env.SENDGRID_API_KEY ||
       isSmtpReady()
@@ -53,6 +54,7 @@ function isEmailReady() {
 }
 
 function emailProviderName() {
+  if (process.env.GAS_MAIL_URL) return "gmail-apps-script";
   if (process.env.RESEND_API_KEY) return "resend";
   if (process.env.BREVO_API_KEY) return "brevo";
   if (process.env.SENDGRID_API_KEY) return "sendgrid";
@@ -127,6 +129,34 @@ function buildMailContent({
     pdfBase64,
     filePath,
   };
+}
+
+async function sendViaGas(mail) {
+  const url = String(process.env.GAS_MAIL_URL || "").trim();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      to: mail.emailTo,
+      cc: mail.emailCc || "",
+      subject: mail.mailSubject,
+      text: mail.text,
+      fileName: mail.fileName,
+      pdfBase64: mail.pdfBase64,
+      fromName: mail.fromName,
+      replyTo: mail.replyTo,
+    }),
+  });
+  const text = await res.text();
+  let body = {};
+  try {
+    body = JSON.parse(text);
+  } catch (_) {
+    body = { raw: text };
+  }
+  if (!res.ok || body.ok === false) {
+    throw new Error(body.error || text.slice(0, 300) || `GAS ${res.status}`);
+  }
 }
 
 async function sendViaResend(mail) {
@@ -235,6 +265,7 @@ async function sendDeliveryEmail(opts) {
     );
   }
   const mail = buildMailContent(opts);
+  if (process.env.GAS_MAIL_URL) return sendViaGas(mail);
   if (process.env.RESEND_API_KEY) return sendViaResend(mail);
   if (process.env.BREVO_API_KEY) return sendViaBrevo(mail);
   if (process.env.SENDGRID_API_KEY) return sendViaSendgrid(mail);
