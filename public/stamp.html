@@ -297,11 +297,11 @@
     </header>
 
     <div class="mode-nav" role="tablist">
-      <button type="button" class="active" data-mode="personal" id="modePersonal">개인 도장</button>
-      <button type="button" data-mode="corp" id="modeCorp">기업 도장</button>
+      <button type="button" data-mode="personal" id="modePersonal">개인 도장</button>
+      <button type="button" class="active" data-mode="corp" id="modeCorp">기업 도장</button>
     </div>
 
-    <div class="card" id="personalCard">
+    <div class="card hidden" id="personalCard">
       <h2>개인 도장</h2>
       <label for="name">이름</label>
       <input id="name" type="text" maxlength="4" placeholder="예: 김강선" value="김강선" />
@@ -311,12 +311,13 @@
       <div class="sel-label" id="selLabel"></div>
     </div>
 
-    <div class="card hidden" id="corpCard">
-      <h2>기업 도장</h2>
+    <div class="card" id="corpCard">
+      <h2>기업 도장 (법인인감)</h2>
+      <p class="hint">바깥 원에 회사명, 가운데 代表理事 — 실물 법인인감과 같은 형태입니다.</p>
       <label for="company">회사명 (바깥 원 글자)</label>
       <input id="company" type="text" maxlength="16" placeholder="예: 주식회사위캔" value="주식회사위캔" />
-      <label for="center">중앙 문구 (원형)</label>
-      <input id="center" type="text" maxlength="6" placeholder="예: 대표이사 / 代表理事" value="代表理事" />
+      <label for="center">중앙 문구</label>
+      <input id="center" type="text" maxlength="6" placeholder="예: 代表理事" value="代表理事" />
       <div class="chips" id="centerChips">
         <button type="button" data-center="代表理事">代表理事</button>
         <button type="button" data-center="대표이사">대표이사</button>
@@ -331,7 +332,7 @@
           <input type="checkbox" id="centerHanja" checked style="width:auto;margin:0" /> 중앙 자동 한자
         </label>
       </div>
-      <label>기업 도장 형태</label>
+      <label>형태 선택</label>
       <div class="corp-shapes" id="corpShapes"></div>
       <div class="sel-label" id="corpSelLabel"></div>
     </div>
@@ -415,7 +416,7 @@
       modeCorp: document.getElementById("modeCorp"),
     };
 
-    let mode = "personal";
+    let mode = "corp";
     let selected = { font: "gulim", shape: "circle", script: "hangul" };
     let corpShape = "circle"; // circle | square
     let lastDataUrl = "";
@@ -899,9 +900,9 @@
       }
     });
 
-    // URL ?mode=corp 지원
-    if (new URLSearchParams(location.search).get("mode") === "corp") setMode("corp");
-    else refresh();
+    // 기본: 기업 도장(법인인감). ?mode=personal 이면 개인
+    if (new URLSearchParams(location.search).get("mode") === "personal") setMode("personal");
+    else setMode("corp");
   </script>
 </body>
 </html>
