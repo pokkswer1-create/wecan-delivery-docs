@@ -30,7 +30,7 @@
       padding: 20px 16px 48px;
     }
     .wrap { max-width: 560px; margin: 0 auto; }
-    .app-nav {
+    .app-nav, .mode-nav {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 6px;
@@ -40,8 +40,9 @@
       border: 1px solid var(--line);
       border-radius: 12px;
     }
-    .app-nav a {
+    .app-nav a, .mode-nav button {
       display: block;
+      width: 100%;
       text-align: center;
       text-decoration: none;
       color: var(--muted);
@@ -49,8 +50,13 @@
       font-weight: 700;
       padding: 11px 8px;
       border-radius: 9px;
+      border: 0;
+      background: transparent;
+      font-family: inherit;
+      cursor: pointer;
+      margin: 0;
     }
-    .app-nav a.active {
+    .app-nav a.active, .mode-nav button.active {
       background: color-mix(in srgb, var(--accent) 28%, #1a222c);
       color: var(--text);
     }
@@ -108,6 +114,7 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
     }
+    .hidden { display: none !important; }
     .picker {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -134,9 +141,7 @@
       margin: 0 auto 8px;
       position: relative;
     }
-    .font-col.selected .radio {
-      border-color: var(--stamp);
-    }
+    .font-col.selected .radio { border-color: var(--stamp); }
     .font-col.selected .radio::after {
       content: "";
       position: absolute;
@@ -164,32 +169,54 @@
       border-color: var(--stamp);
       background: #fff5f5;
     }
-    .font-col .grid4 canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
+    .font-col .grid4 canvas { width: 100%; height: 100%; display: block; }
+    .font-col .fname { color: #222; font-size: 12px; font-weight: 700; }
+    .corp-shapes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
     }
-    .font-col .fname {
+    .corp-shape {
+      background: #fff;
+      border: 2px solid #d8dde5;
+      border-radius: 12px;
+      padding: 10px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .corp-shape.on {
+      border-color: var(--stamp);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--stamp) 35%, transparent);
+    }
+    .corp-shape canvas {
+      width: 100%;
+      max-width: 140px;
+      aspect-ratio: 1;
+      display: block;
+      margin: 0 auto 8px;
+    }
+    .corp-shape span {
       color: #222;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
     }
     .preview-wrap {
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 220px;
-      background: #fff;
+      min-height: 240px;
+      background: #111;
       border-radius: 12px;
       margin-bottom: 12px;
       border: 1px solid var(--line);
     }
     #preview {
-      width: 200px;
-      height: 200px;
+      width: 220px;
+      height: 220px;
       max-width: 100%;
     }
-    button {
+    button.action {
       width: 100%;
       border: 0;
       border-radius: 12px;
@@ -220,11 +247,7 @@
       font-size: 12px;
       line-height: 1.45;
     }
-    .status {
-      min-height: 20px;
-      font-size: 13px;
-      margin-top: 4px;
-    }
+    .status { min-height: 20px; font-size: 13px; margin-top: 4px; }
     .status.ok { color: #3ecf8e; }
     .status.err { color: #e35d6a; }
     .steps {
@@ -240,6 +263,25 @@
       font-size: 12px;
       margin: -4px 0 10px;
     }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: -4px 0 12px;
+    }
+    .chips button {
+      width: auto;
+      margin: 0;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #12181f;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -251,93 +293,92 @@
     <header>
       <div class="brand">WECAN</div>
       <h1>온라인 도장</h1>
-      <p>이름을 입력하고 아래 샘플 중 원하는 도장을 고르세요. (잡코리아 스타일)</p>
+      <p>개인 도장과 기업(법인) 도장을 만들고 서류에 적용할 수 있습니다.</p>
     </header>
 
-    <div class="card">
-      <h2>도장 만들기</h2>
-      <label for="name">이름</label>
-      <input id="name" type="text" maxlength="4" placeholder="예: 김강선 / 홍길동" value="김강선" />
+    <div class="mode-nav" role="tablist">
+      <button type="button" class="active" data-mode="personal" id="modePersonal">개인 도장</button>
+      <button type="button" data-mode="corp" id="modeCorp">기업 도장</button>
+    </div>
 
+    <div class="card" id="personalCard">
+      <h2>개인 도장</h2>
+      <label for="name">이름</label>
+      <input id="name" type="text" maxlength="4" placeholder="예: 김강선" value="김강선" />
       <label>도장 모양 선택</label>
-      <p class="hint">서체마다 원형·사각 × 한글·한자 4가지가 있습니다. 원하는 칸을 누르세요.</p>
+      <p class="hint">굴림·궁서·바탕 / 원형·사각 / 한글·한자</p>
       <div class="picker" id="picker"></div>
       <div class="sel-label" id="selLabel"></div>
+    </div>
 
-      <div class="preview-wrap">
-        <canvas id="preview" width="512" height="512"></canvas>
+    <div class="card hidden" id="corpCard">
+      <h2>기업 도장</h2>
+      <label for="company">회사명 (바깥 원 / 사각 글자)</label>
+      <input id="company" type="text" maxlength="16" placeholder="예: 주식회사 위캔" value="주식회사 위캔" />
+      <label for="center">중앙 문구 (원형만)</label>
+      <input id="center" type="text" maxlength="6" placeholder="예: 대표이사" value="대표이사" />
+      <div class="chips" id="centerChips">
+        <button type="button" data-center="대표이사">대표이사</button>
+        <button type="button" data-center="사용인감">사용인감</button>
+        <button type="button" data-center="직인">직인</button>
+        <button type="button" data-center="인">인</button>
       </div>
+      <label>기업 도장 형태</label>
+      <div class="corp-shapes" id="corpShapes"></div>
+      <div class="sel-label" id="corpSelLabel"></div>
+    </div>
 
-      <button class="primary" type="button" id="makeBtn">도장 만들기</button>
-      <button class="ghost" type="button" id="downloadBtn">이미지로 저장하기</button>
+    <div class="card">
+      <div class="preview-wrap">
+        <canvas id="preview" width="640" height="640"></canvas>
+      </div>
+      <button class="action primary" type="button" id="makeBtn">도장 만들기</button>
+      <button class="action ghost" type="button" id="downloadBtn">이미지로 저장하기</button>
     </div>
 
     <div class="card">
       <h2>납품서류에 적용</h2>
-      <p class="hint">만든 도장을 견적서·납품서·거래명세서 서명란에 사용합니다. (접속 비밀번호 필요)</p>
+      <p class="hint">만든 도장을 견적서·납품서·거래명세서 서명란에 사용합니다.</p>
       <label for="pin">접속 비밀번호</label>
       <input id="pin" type="password" autocomplete="current-password" />
-      <button class="primary" type="button" id="applyBtn">서류 도장으로 적용</button>
-      <button class="danger" type="button" id="resetBtn">기본 도장으로 되돌리기</button>
+      <button class="action primary" type="button" id="applyBtn">서류 도장으로 적용</button>
+      <button class="action danger" type="button" id="resetBtn">기본 도장으로 되돌리기</button>
       <div class="status" id="status"></div>
     </div>
 
     <div class="card">
       <h2>이용방법</h2>
       <ol class="steps">
-        <li>이름을 입력합니다.</li>
-        <li>굴림·궁서·바탕 중 원하는 도장 칸을 고릅니다.</li>
-        <li>도장 만들기 / 저장 / 서류 적용을 합니다.</li>
+        <li>개인 / 기업 도장 탭을 고릅니다.</li>
+        <li>이름·회사명과 원하는 형태를 선택합니다.</li>
+        <li>저장하거나 서류에 적용합니다.</li>
       </ol>
     </div>
   </div>
 
   <script>
     const INK = "#e31c23";
+    const SEAL_FONT = 'Gungsuh, Batang, "Apple Myungjo", "Malgun Gothic", serif';
     const FONTS = [
-      {
-        key: "gulim",
-        label: "굴림체",
-        family: 'Gulim, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
-        weight: "700",
-      },
-      {
-        key: "gungseo",
-        label: "궁서체",
-        family: 'Gungsuh, "Batang", "Apple Myungjo", serif',
-        weight: "700",
-      },
-      {
-        key: "batang",
-        label: "바탕체",
-        family: 'Batang, "Apple Myungjo", serif',
-        weight: "700",
-      },
+      { key: "gulim", label: "굴림체", family: 'Gulim, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif', weight: "700" },
+      { key: "gungseo", label: "궁서체", family: 'Gungsuh, Batang, "Apple Myungjo", serif', weight: "700" },
+      { key: "batang", label: "바탕체", family: 'Batang, "Apple Myungjo", serif', weight: "700" },
     ];
-
-    // 성씨 우선
     const SURNAME = {
       김: "金", 이: "李", 박: "朴", 최: "崔", 정: "鄭", 강: "姜", 조: "趙", 윤: "尹",
       장: "張", 임: "林", 한: "韓", 오: "吳", 서: "徐", 신: "申", 권: "權", 황: "黃",
       안: "安", 송: "宋", 전: "全", 홍: "洪", 유: "柳", 고: "高", 문: "文", 양: "梁",
       손: "孫", 배: "裵", 백: "白", 허: "許", 남: "南", 심: "沈", 노: "盧", 하: "河",
       곽: "郭", 성: "成", 차: "車", 주: "周", 우: "禹", 구: "具", 민: "閔", 류: "柳",
-      진: "陳", 엄: "嚴", 원: "元", 채: "蔡", 천: "千", 방: "方", 공: "孔", 현: "玄",
-      배: "裵", 변: "卞", 마: "馬", 석: "石", 선: "宣", 설: "薛", 염: "廉", 예: "芮",
+      진: "陳", 엄: "嚴", 원: "元", 채: "蔡",
     };
-
-    // 이름 음절
     const GIVEN = {
       강: "康", 선: "善", 길: "吉", 동: "東", 영: "英", 수: "秀", 호: "浩", 준: "俊",
       현: "賢", 우: "祐", 재: "宰", 석: "錫", 훈: "勳", 태: "泰", 경: "京", 환: "煥",
       민: "敏", 지: "智", 혜: "慧", 은: "恩", 아: "雅", 연: "姸", 윤: "允", 나: "娜",
-      미: "美", 정: "姃", 희: "喜", 숙: "淑", 순: "順", 철: "哲", 병: "炳", 광: "光",
-      덕: "德", 용: "勇", 규: "圭", 찬: "燦", 혁: "赫", 승: "承", 빈: "彬", 웅: "雄",
-      기: "基", 종: "鍾", 엽: "燁", 범: "範", 근: "根", 형: "炯", 욱: "旭", 일: "一",
-      식: "植", 섭: "燮", 원: "源", 평: "平", 상: "相", 대: "大", 중: "中", 성: "成",
-      진: "眞", 서: "瑞", 하: "夏", 림: "林", 라: "羅", 자: "子", 인: "印", 홍: "弘",
+      미: "美", 정: "姃", 희: "喜", 숙: "淑", 순: "順", 철: "哲", 용: "勇", 기: "基",
+      성: "成", 진: "眞", 서: "瑞", 인: "印",
     };
-
     const VARIANTS = [
       { shape: "circle", script: "hangul", title: "원형 한글" },
       { shape: "square", script: "hangul", title: "사각 한글" },
@@ -346,28 +387,38 @@
     ];
 
     const els = {
+      personalCard: document.getElementById("personalCard"),
+      corpCard: document.getElementById("corpCard"),
       name: document.getElementById("name"),
+      company: document.getElementById("company"),
+      center: document.getElementById("center"),
       picker: document.getElementById("picker"),
+      corpShapes: document.getElementById("corpShapes"),
       preview: document.getElementById("preview"),
       selLabel: document.getElementById("selLabel"),
+      corpSelLabel: document.getElementById("corpSelLabel"),
       makeBtn: document.getElementById("makeBtn"),
       downloadBtn: document.getElementById("downloadBtn"),
       applyBtn: document.getElementById("applyBtn"),
       resetBtn: document.getElementById("resetBtn"),
       pin: document.getElementById("pin"),
       status: document.getElementById("status"),
+      modePersonal: document.getElementById("modePersonal"),
+      modeCorp: document.getElementById("modeCorp"),
     };
 
+    let mode = "personal";
     let selected = { font: "gulim", shape: "circle", script: "hangul" };
+    let corpShape = "circle"; // circle | square
     let lastDataUrl = "";
     let lastText = "";
 
-    function rawName() {
-      return (els.name.value || "").trim().replace(/\s+/g, "").slice(0, 4);
+    function onlyChars(s) {
+      return String(s || "").replace(/\s+/g, "");
     }
 
     function hangulStampText() {
-      let n = rawName();
+      let n = onlyChars(els.name.value).slice(0, 4);
       if (!n) return "";
       if (!n.endsWith("인") && n.length < 4) n += "인";
       return n.slice(0, 4);
@@ -383,7 +434,6 @@
 
     function hanjaStampText() {
       const h = hangulStampText();
-      if (!h) return "";
       return [...h].map((ch, i) => toHanjaChar(ch, i)).join("");
     }
 
@@ -393,59 +443,6 @@
 
     function fontMeta(key) {
       return FONTS.find((f) => f.key === key) || FONTS[0];
-    }
-
-    function drawStamp(canvas, text, fontKey, shapeKind, size) {
-      const ctx = canvas.getContext("2d");
-      const s = size || canvas.width;
-      canvas.width = s;
-      canvas.height = s;
-      ctx.clearRect(0, 0, s, s);
-
-      const cx = s / 2;
-      const cy = s / 2;
-      const stroke = Math.max(2, s * 0.045);
-      ctx.strokeStyle = INK;
-      ctx.fillStyle = INK;
-      ctx.lineWidth = stroke;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-
-      if (shapeKind === "square") {
-        const pad = s * 0.08;
-        const w = s - pad * 2;
-        const r = s * 0.08;
-        roundRect(ctx, pad, pad, w, w, r);
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.arc(cx, cy, s * 0.42, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      const chars = [...text];
-      if (!chars.length) return;
-
-      const font = fontMeta(fontKey);
-      // 잡코리아처럼 최대 4자를 2×2로 배치
-      while (chars.length < 4) chars.push("");
-      const show = chars.slice(0, 4);
-      const fontSize = s * (fontKey === "gungseo" ? 0.26 : 0.28);
-      ctx.font = `${font.weight} ${fontSize}px ${font.family}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      const gap = s * 0.22;
-      const positions = [
-        [cx - gap / 2, cy - gap / 2],
-        [cx + gap / 2, cy - gap / 2],
-        [cx - gap / 2, cy + gap / 2],
-        [cx + gap / 2, cy + gap / 2],
-      ];
-      show.forEach((ch, i) => {
-        if (!ch) return;
-        ctx.fillText(ch, positions[i][0], positions[i][1] + s * 0.01);
-      });
     }
 
     function roundRect(ctx, x, y, w, h, r) {
@@ -458,68 +455,285 @@
       ctx.closePath();
     }
 
-    function selectionTitle() {
-      const f = fontMeta(selected.font).label;
-      const v = VARIANTS.find(
-        (x) => x.shape === selected.shape && x.script === selected.script
-      );
-      return `${f} · ${v ? v.title : ""}`.trim();
+    function drawPersonalStamp(canvas, text, fontKey, shapeKind, size) {
+      const ctx = canvas.getContext("2d");
+      const s = size || canvas.width;
+      canvas.width = s;
+      canvas.height = s;
+      ctx.clearRect(0, 0, s, s);
+      const cx = s / 2;
+      const cy = s / 2;
+      ctx.strokeStyle = INK;
+      ctx.fillStyle = INK;
+      ctx.lineWidth = Math.max(2, s * 0.045);
+      if (shapeKind === "square") {
+        const pad = s * 0.08;
+        roundRect(ctx, pad, pad, s - pad * 2, s - pad * 2, s * 0.08);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(cx, cy, s * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const chars = [...text];
+      while (chars.length < 4) chars.push("");
+      const show = chars.slice(0, 4);
+      const font = fontMeta(fontKey);
+      const fontSize = s * 0.28;
+      ctx.font = `700 ${fontSize}px ${font.family}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const gap = s * 0.22;
+      const positions = [
+        [cx - gap / 2, cy - gap / 2],
+        [cx + gap / 2, cy - gap / 2],
+        [cx - gap / 2, cy + gap / 2],
+        [cx + gap / 2, cy + gap / 2],
+      ];
+      show.forEach((ch, i) => {
+        if (ch) ctx.fillText(ch, positions[i][0], positions[i][1] + s * 0.01);
+      });
     }
 
-    function renderPicker() {
+    function drawRingText(ctx, text, cx, cy, radius, fontSize) {
+      const chars = [...onlyChars(text)];
+      if (!chars.length) return;
+      // 글자가 적을 때 원주를 채우도록 가운데점(·) 보강
+      while (chars.length < 8) {
+        const next = [];
+        chars.forEach((ch, i) => {
+          next.push(ch);
+          if (i < chars.length - 1) next.push("·");
+        });
+        chars.length = 0;
+        chars.push(...next);
+        if (chars.length >= 10) break;
+      }
+      const n = chars.length;
+      ctx.fillStyle = INK;
+      ctx.font = `700 ${fontSize}px ${SEAL_FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      // 시계방향, 상단에서 시작
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + ((i + 0.5) / n) * Math.PI * 2;
+        ctx.save();
+        ctx.translate(cx + Math.cos(a) * radius, cy + Math.sin(a) * radius);
+        ctx.rotate(a + Math.PI / 2);
+        ctx.fillText(chars[i], 0, 0);
+        ctx.restore();
+      }
+    }
+
+    function drawCenterGrid(ctx, text, cx, cy, box, fontSize) {
+      let chars = [...onlyChars(text)];
+      if (!chars.length) return;
+      if (chars.length === 1) chars = [chars[0], "", "", ""];
+      else if (chars.length === 2) chars = [chars[0], chars[1], "", ""];
+      else if (chars.length === 3) chars = [chars[0], chars[1], chars[2], ""];
+      chars = chars.slice(0, 4);
+      while (chars.length < 4) chars.push("");
+      ctx.fillStyle = INK;
+      ctx.font = `800 ${fontSize}px ${SEAL_FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const gap = box * 0.42;
+      const pos = [
+        [cx - gap / 2, cy - gap / 2],
+        [cx + gap / 2, cy - gap / 2],
+        [cx - gap / 2, cy + gap / 2],
+        [cx + gap / 2, cy + gap / 2],
+      ];
+      chars.forEach((ch, i) => {
+        if (ch) ctx.fillText(ch, pos[i][0], pos[i][1]);
+      });
+    }
+
+    function drawCorpCircle(canvas, company, center, size) {
+      const ctx = canvas.getContext("2d");
+      const s = size || canvas.width;
+      canvas.width = s;
+      canvas.height = s;
+      ctx.clearRect(0, 0, s, s);
+      const cx = s / 2;
+      const cy = s / 2;
+      const outerR = s * 0.46;
+      const innerR = s * 0.28;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = Math.max(2, s * 0.018);
+      ctx.beginPath();
+      ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(2, s * 0.016);
+      ctx.beginPath();
+      ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
+      ctx.stroke();
+      const ringR = (outerR + innerR) / 2;
+      const ringFont = Math.min(s * 0.085, (2 * Math.PI * ringR) / Math.max(8, onlyChars(company).length) * 0.7);
+      drawRingText(ctx, company, cx, cy, ringR, ringFont);
+      drawCenterGrid(ctx, center || "대표이사", cx, cy, innerR * 1.55, s * 0.13);
+    }
+
+    function gridSizeFor(len) {
+      if (len <= 4) return 2;
+      if (len <= 9) return 3;
+      return 4;
+    }
+
+    function charsToGrid(chars, n) {
+      // 전통 직인: 오른쪽 열부터 위에서 아래로
+      const grid = Array.from({ length: n }, () => Array(n).fill(""));
+      let i = 0;
+      for (let col = n - 1; col >= 0; col--) {
+        for (let row = 0; row < n; row++) {
+          grid[row][col] = chars[i++] || "";
+        }
+      }
+      return grid;
+    }
+
+    function drawCorpSquare(canvas, company, size) {
+      const ctx = canvas.getContext("2d");
+      const s = size || canvas.width;
+      canvas.width = s;
+      canvas.height = s;
+      ctx.clearRect(0, 0, s, s);
+      const chars = [...onlyChars(company)].slice(0, 16);
+      const n = gridSizeFor(Math.max(chars.length, 4));
+      while (chars.length < n * n) chars.push("");
+      const pad = s * 0.06;
+      const outer = s - pad * 2;
+      const inset = s * 0.035;
+      ctx.strokeStyle = INK;
+      ctx.fillStyle = INK;
+      ctx.lineWidth = Math.max(3, s * 0.028);
+      ctx.strokeRect(pad, pad, outer, outer);
+      ctx.lineWidth = Math.max(2, s * 0.014);
+      ctx.strokeRect(pad + inset, pad + inset, outer - inset * 2, outer - inset * 2);
+
+      const innerPad = pad + inset * 1.6;
+      const cell = (s - innerPad * 2) / n;
+      const fontSize = cell * 0.72;
+      ctx.font = `800 ${fontSize}px ${SEAL_FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const grid = charsToGrid(chars, n);
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          const ch = grid[r][c];
+          if (!ch) continue;
+          const x = innerPad + c * cell + cell / 2;
+          const y = innerPad + r * cell + cell / 2;
+          ctx.fillText(ch, x, y + cell * 0.02);
+        }
+      }
+    }
+
+    function renderPersonalPicker() {
       const sampleHangul = hangulStampText() || "홍길동인";
       const sampleHanja = hanjaStampText() || "洪吉東印";
       els.picker.innerHTML = "";
-
       FONTS.forEach((font) => {
         const col = document.createElement("div");
         col.className = "font-col" + (selected.font === font.key ? " selected" : "");
         col.innerHTML = `<div class="radio"></div><div class="grid4"></div><div class="fname">${font.label}</div>`;
         const grid = col.querySelector(".grid4");
-
         VARIANTS.forEach((v) => {
           const btn = document.createElement("button");
           btn.type = "button";
-          const on =
+          if (
             selected.font === font.key &&
             selected.shape === v.shape &&
-            selected.script === v.script;
-          if (on) btn.classList.add("on");
+            selected.script === v.script
+          ) {
+            btn.classList.add("on");
+          }
           const c = document.createElement("canvas");
           c.width = 128;
           c.height = 128;
-          const text = v.script === "hanja" ? sampleHanja : sampleHangul;
-          drawStamp(c, text, font.key, v.shape, 128);
+          drawPersonalStamp(
+            c,
+            v.script === "hanja" ? sampleHanja : sampleHangul,
+            font.key,
+            v.shape,
+            128
+          );
           btn.appendChild(c);
-          btn.title = `${font.label} ${v.title}`;
           btn.addEventListener("click", (e) => {
             e.stopPropagation();
             selected = { font: font.key, shape: v.shape, script: v.script };
-            renderPicker();
+            renderPersonalPicker();
             make(false);
           });
           grid.appendChild(btn);
         });
-
         col.addEventListener("click", () => {
           selected.font = font.key;
-          renderPicker();
+          renderPersonalPicker();
           make(false);
         });
         els.picker.appendChild(col);
       });
     }
 
+    function renderCorpShapes() {
+      const company = onlyChars(els.company.value) || "주식회사위캔";
+      const center = onlyChars(els.center.value) || "대표이사";
+      els.corpShapes.innerHTML = "";
+      [
+        { key: "circle", label: "원형 법인인감" },
+        { key: "square", label: "사각 법인직인" },
+      ].forEach((item) => {
+        const box = document.createElement("div");
+        box.className = "corp-shape" + (corpShape === item.key ? " on" : "");
+        const c = document.createElement("canvas");
+        c.width = 220;
+        c.height = 220;
+        if (item.key === "circle") drawCorpCircle(c, company, center, 220);
+        else drawCorpSquare(c, company, 220);
+        box.appendChild(c);
+        const span = document.createElement("span");
+        span.textContent = item.label;
+        box.appendChild(span);
+        box.addEventListener("click", () => {
+          corpShape = item.key;
+          renderCorpShapes();
+          make(false);
+        });
+        els.corpShapes.appendChild(box);
+      });
+    }
+
     function make(announce) {
-      const text = stampTextFor(selected.script);
-      if (!text) {
-        setStatus("err", "이름을 입력하세요.");
-        return false;
+      if (mode === "personal") {
+        const text = stampTextFor(selected.script);
+        if (!text) {
+          setStatus("err", "이름을 입력하세요.");
+          return false;
+        }
+        drawPersonalStamp(els.preview, text, selected.font, selected.shape, 640);
+        lastText = text;
+        const f = fontMeta(selected.font).label;
+        const v = VARIANTS.find((x) => x.shape === selected.shape && x.script === selected.script);
+        els.selLabel.textContent = `${f} · ${v ? v.title : ""} · ${text}`;
+      } else {
+        const company = onlyChars(els.company.value);
+        const center = onlyChars(els.center.value) || "대표이사";
+        if (!company) {
+          setStatus("err", "회사명을 입력하세요.");
+          return false;
+        }
+        if (corpShape === "circle") {
+          drawCorpCircle(els.preview, company, center, 640);
+          lastText = `${company}_${center}`;
+          els.corpSelLabel.textContent = `원형 법인인감 · ${company} / ${center}`;
+        } else {
+          drawCorpSquare(els.preview, company, 640);
+          lastText = company;
+          els.corpSelLabel.textContent = `사각 법인직인 · ${company}`;
+        }
       }
-      drawStamp(els.preview, text, selected.font, selected.shape, 512);
       lastDataUrl = els.preview.toDataURL("image/png");
-      lastText = text;
-      els.selLabel.textContent = selectionTitle() + ` · ${text}`;
       if (announce !== false) setStatus("", "");
       return true;
     }
@@ -529,22 +743,36 @@
       els.status.textContent = msg || "";
     }
 
-    function refreshAll() {
-      renderPicker();
+    function setMode(next) {
+      mode = next;
+      els.modePersonal.classList.toggle("active", mode === "personal");
+      els.modeCorp.classList.toggle("active", mode === "corp");
+      els.personalCard.classList.toggle("hidden", mode !== "personal");
+      els.corpCard.classList.toggle("hidden", mode !== "corp");
+      refresh();
+    }
+
+    function refresh() {
+      if (mode === "personal") renderPersonalPicker();
+      else renderCorpShapes();
       make(false);
     }
+
+    els.modePersonal.addEventListener("click", () => setMode("personal"));
+    els.modeCorp.addEventListener("click", () => setMode("corp"));
+    els.name.addEventListener("input", refresh);
+    els.company.addEventListener("input", refresh);
+    els.center.addEventListener("input", refresh);
+    document.getElementById("centerChips").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-center]");
+      if (!btn) return;
+      els.center.value = btn.dataset.center;
+      refresh();
+    });
 
     els.makeBtn.addEventListener("click", () => {
       if (make(true)) setStatus("ok", "도장이 완성되었습니다.");
     });
-    els.name.addEventListener("input", refreshAll);
-    els.name.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        els.makeBtn.click();
-      }
-    });
-
     els.downloadBtn.addEventListener("click", () => {
       if (!make(false)) return;
       const a = document.createElement("a");
@@ -552,7 +780,6 @@
       a.download = `도장_${lastText || "stamp"}.png`;
       a.click();
     });
-
     els.applyBtn.addEventListener("click", async () => {
       if (!make(false)) return;
       if (!els.pin.value) {
@@ -572,7 +799,6 @@
         setStatus("err", err.message);
       }
     });
-
     els.resetBtn.addEventListener("click", async () => {
       if (!els.pin.value) {
         setStatus("err", "접속 비밀번호를 입력하세요.");
@@ -592,7 +818,9 @@
       }
     });
 
-    refreshAll();
+    // URL ?mode=corp 지원
+    if (new URLSearchParams(location.search).get("mode") === "corp") setMode("corp");
+    else refresh();
   </script>
 </body>
 </html>
