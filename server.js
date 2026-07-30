@@ -65,13 +65,23 @@ app.get("/api/meta", (_req, res) => {
     clientDefault: DEFAULT_CLIENT,
     dateDefault: todayISO(),
     supplierEmail: SUPPLIER.email,
-    packages: PACKAGE_TEMPLATES.map((t) => ({
-      id: t.id,
-      title: t.title,
-      defaultTotalIncl: t.defaultTotalIncl || null,
-      defaultDailyIncl: t.defaultDailyIncl || null,
-      defaultDays: t.defaultDays || null,
-    })),
+    packages: PACKAGE_TEMPLATES.map((t) => {
+      const sample =
+        t.id === "3_지주대임대"
+          ? t.build({
+              dailyIncl: t.defaultDailyIncl,
+              days: t.defaultDays,
+            })
+          : t.build(t.defaultTotalIncl);
+      return {
+        id: t.id,
+        title: t.title,
+        defaultTotalIncl: t.defaultTotalIncl || null,
+        defaultDailyIncl: t.defaultDailyIncl || null,
+        defaultDays: t.defaultDays || null,
+        items: sample.items,
+      };
+    }),
     emailConfigured: isSmtpReady(),
   });
 });
@@ -81,6 +91,10 @@ app.post("/api/generate", async (req, res) => {
     const {
       pin,
       packageIds,
+      customItems,
+      title,
+      note,
+      photoPackageIds,
       client,
       date,
       totals,
@@ -95,18 +109,29 @@ app.post("/api/generate", async (req, res) => {
     if (String(pin || "") !== String(FORM_PIN)) {
       return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
     }
-    if (!Array.isArray(packageIds) || packageIds.length === 0) {
-      return res.status(400).json({ ok: false, error: "품목을 1개 이상 선택하세요." });
+
+    const hasCustom = Array.isArray(customItems) && customItems.length > 0;
+    const hasPackages = Array.isArray(packageIds) && packageIds.length > 0;
+    if (!hasCustom && !hasPackages) {
+      return res.status(400).json({ ok: false, error: "품목을 1개 이상 입력하세요." });
     }
 
     const result = await buildFromRequest({
-      packageIds,
+      packageIds: hasCustom ? undefined : packageIds,
+      customItems: hasCustom ? customItems : undefined,
+      title,
+      note,
+      photoPackageIds,
       client: client || DEFAULT_CLIENT,
       date: date || todayISO(),
       totals: totals || {},
       rentalDailyIncl,
       rentalDays,
-      mode: packageIds.length > 1 ? "combined" : "single",
+      mode: hasCustom
+        ? "single"
+        : packageIds.length > 1
+          ? "combined"
+          : "single",
     });
 
     const fileName = path.basename(result.outPath);

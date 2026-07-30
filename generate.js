@@ -503,6 +503,49 @@ function resolveCtx(options = {}) {
 }
 
 function resolvePackages(selection = {}) {
+  // 자유 입력 품목
+  if (Array.isArray(selection.customItems) && selection.customItems.length > 0) {
+    const items = selection.customItems.map((it, i) => {
+      const name = String(it.name || "").trim();
+      const qty = Number(it.qty);
+      const unitPriceIncl = Number(it.unitPriceIncl);
+      if (!name) throw new Error(`${i + 1}번 품명을 입력하세요.`);
+      if (!Number.isFinite(qty) || qty <= 0) throw new Error(`${name}: 수량을 확인하세요.`);
+      if (!Number.isFinite(unitPriceIncl) || unitPriceIncl < 0) {
+        throw new Error(`${name}: 단가를 확인하세요.`);
+      }
+      return {
+        name,
+        spec: String(it.spec || "").trim(),
+        unit: String(it.unit || "식").trim() || "식",
+        qty,
+        unitPriceIncl,
+      };
+    });
+    const totalIncl = items.reduce((s, it) => s + it.unitPriceIncl * it.qty, 0);
+    const title = String(selection.title || "납품").trim() || "납품";
+    const man = Math.round(totalIncl / 10000);
+    const safeTitle = title.replace(/[\\/:*?"<>|]/g, "_");
+    const photoSet = new Set();
+    for (const id of selection.photoPackageIds || []) {
+      const tpl = PACKAGE_TEMPLATES.find((t) => t.id === id);
+      (tpl?.photos || []).forEach((p) => photoSet.add(p));
+    }
+    return [
+      {
+        id: "custom",
+        title,
+        fileName: `위캔_${safeTitle}_${man}만원_납품서류.pdf`,
+        totalIncl,
+        items,
+        photos: [...photoSet],
+        note:
+          selection.note ||
+          `납품 품목 ${items.length}건. 부가세 포함 총액 ${fmt(totalIncl)}원.`,
+      },
+    ];
+  }
+
   const ids = selection.packageIds || PACKAGE_TEMPLATES.map((t) => t.id);
   const packages = [];
 
@@ -554,7 +597,7 @@ async function buildPackage(pkg, options = {}) {
     parts.push(...(await writeBizBankPdfs(dir)));
   }
 
-  {
+  if (pkg.photos && pkg.photos.length) {
     const html = path.join(dir, "06_photos.html");
     const pdf = path.join(dir, "06_photos.pdf");
     fs.writeFileSync(
@@ -594,15 +637,17 @@ async function buildCombined(packages, options = {}) {
       parts.push(pdf);
     }
 
-    const photoHtml = path.join(pkgDir, "06_photos.html");
-    const photoPdf = path.join(pkgDir, "06_photos.pdf");
-    fs.writeFileSync(
-      photoHtml,
-      makeImageHtml(pkg.photos, `${pkg.title} 관련 사진`),
-      "utf8"
-    );
-    await htmlToPdf(photoHtml, photoPdf);
-    parts.push(photoPdf);
+    if (pkg.photos && pkg.photos.length) {
+      const photoHtml = path.join(pkgDir, "06_photos.html");
+      const photoPdf = path.join(pkgDir, "06_photos.pdf");
+      fs.writeFileSync(
+        photoHtml,
+        makeImageHtml(pkg.photos, `${pkg.title} 관련 사진`),
+        "utf8"
+      );
+      await htmlToPdf(photoHtml, photoPdf);
+      parts.push(photoPdf);
+    }
   }
 
   parts.push(...(await writeBizBankPdfs(dir)));

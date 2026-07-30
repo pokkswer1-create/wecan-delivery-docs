@@ -31,10 +31,8 @@
         var(--bg);
       padding: 20px 16px 40px;
     }
-    .wrap { max-width: 480px; margin: 0 auto; }
-    header {
-      margin-bottom: 18px;
-    }
+    .wrap { max-width: 520px; margin: 0 auto; }
+    header { margin-bottom: 18px; }
     header .brand {
       font-size: 13px;
       letter-spacing: 0.18em;
@@ -76,53 +74,92 @@
     input[type="email"],
     input[type="date"],
     input[type="number"],
-    input[type="password"] {
+    input[type="password"],
+    textarea {
       width: 100%;
       border: 1px solid var(--line);
       background: #12181f;
       color: var(--text);
       border-radius: 10px;
-      padding: 12px 12px;
+      padding: 12px;
       font-size: 16px;
       margin-bottom: 12px;
       outline: none;
+      font-family: inherit;
     }
-    input:focus {
+    textarea { min-height: 64px; resize: vertical; }
+    input:focus, textarea:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
     }
-    .pkg {
+    .presets {
       display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      padding: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .presets button {
+      width: auto;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #12181f;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .item {
       border: 1px solid var(--line);
       border-radius: 12px;
-      margin-bottom: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
       background: #12181f;
     }
-    .pkg input { margin-top: 3px; width: 18px; height: 18px; }
-    .pkg .meta { flex: 1; min-width: 0; }
-    .pkg .title { font-weight: 700; font-size: 15px; }
-    .pkg .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .item .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .item .top strong { font-size: 13px; }
+    .item .del {
+      width: auto;
+      padding: 6px 10px;
+      background: transparent;
+      border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+      color: #ffb4bc;
+      border-radius: 8px;
+      font-size: 12px;
+    }
     .row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
-    .checks {
-      display: flex;
-      flex-direction: column;
+    .row3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.4fr;
       gap: 8px;
-      margin-bottom: 4px;
     }
+    .sumline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #0f161d;
+      border: 1px solid var(--line);
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .sumline strong { color: var(--accent-2); font-size: 16px; }
     .checks label.inline {
       display: flex;
       align-items: center;
       gap: 8px;
       color: var(--text);
       font-size: 14px;
-      margin: 0;
+      margin: 0 0 10px;
     }
     .checks input { width: 18px; height: 18px; }
     button {
@@ -138,10 +175,7 @@
       background: linear-gradient(180deg, #2aa883, var(--accent));
       color: #fff;
     }
-    button.primary:disabled {
-      opacity: 0.55;
-      cursor: wait;
-    }
+    button.primary:disabled { opacity: 0.55; cursor: wait; }
     button.ghost {
       margin-top: 8px;
       background: transparent;
@@ -175,7 +209,6 @@
       margin-top: -4px;
       margin-bottom: 10px;
     }
-    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -183,30 +216,32 @@
     <header>
       <div class="brand">WECAN</div>
       <h1>납품서류 만들기</h1>
-      <p>어디서든 품목 선택 → PDF 생성 → 이메일 발송. 홈화면에 추가해 두면 앱처럼 쓸 수 있습니다.</p>
+      <p>품명을 직접 쓰거나, 아래 버튼으로 기본 품목을 불러온 뒤 수정하세요.</p>
     </header>
 
     <form id="form">
       <div class="card">
         <h2>접속</h2>
         <label for="pin">비밀번호</label>
-        <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="FORM_PIN" required />
+        <input id="pin" type="password" autocomplete="current-password" required />
+      </div>
+
+      <div class="card">
+        <h2>문서 제목</h2>
+        <input id="docTitle" type="text" placeholder="예: 지주대 임대 / 심판대 납품" value="납품" />
+        <label for="note">참고사항(선택)</label>
+        <textarea id="note" placeholder="비우면 자동 생성"></textarea>
       </div>
 
       <div class="card">
         <h2>품목</h2>
-        <div id="packages"></div>
-        <div id="rentalFields" class="hidden">
-          <div class="row">
-            <div>
-              <label for="rentalDaily">일 단가(부가세포함)</label>
-              <input id="rentalDaily" type="number" step="1000" />
-            </div>
-            <div>
-              <label for="rentalDays">일수</label>
-              <input id="rentalDays" type="number" min="1" step="1" />
-            </div>
-          </div>
+        <p class="hint">기본 품목 불러오기 (추가됨 · 수정 가능)</p>
+        <div class="presets" id="presets"></div>
+        <div id="items"></div>
+        <button class="ghost" type="button" id="addItem">+ 품목 추가</button>
+        <div class="sumline" style="margin-top:12px">
+          <span>합계 (부가세포함)</span>
+          <strong id="sumText">0원</strong>
         </div>
       </div>
 
@@ -239,10 +274,12 @@
 
   <script>
     const els = {
-      packages: document.getElementById("packages"),
-      rentalFields: document.getElementById("rentalFields"),
-      rentalDaily: document.getElementById("rentalDaily"),
-      rentalDays: document.getElementById("rentalDays"),
+      presets: document.getElementById("presets"),
+      items: document.getElementById("items"),
+      addItem: document.getElementById("addItem"),
+      docTitle: document.getElementById("docTitle"),
+      note: document.getElementById("note"),
+      sumText: document.getElementById("sumText"),
       client: document.getElementById("client"),
       date: document.getElementById("date"),
       pin: document.getElementById("pin"),
@@ -257,18 +294,106 @@
     };
 
     let meta = null;
+    let rows = [];
+    let photoPackageIds = [];
 
     function money(n) {
-      return Math.round(n).toLocaleString("ko-KR");
+      return Math.round(Number(n) || 0).toLocaleString("ko-KR");
     }
 
-    function selectedIds() {
-      return [...document.querySelectorAll(".pkg-check:checked")].map((el) => el.value);
+    function blankRow() {
+      return { name: "", spec: "", unit: "식", qty: 1, unitPriceIncl: 0 };
     }
 
-    function syncRental() {
-      const on = selectedIds().includes("3_지주대임대");
-      els.rentalFields.classList.toggle("hidden", !on);
+    function calcSum() {
+      const sum = rows.reduce((s, r) => s + Number(r.qty || 0) * Number(r.unitPriceIncl || 0), 0);
+      els.sumText.textContent = money(sum) + "원";
+      return sum;
+    }
+
+    function readDomIntoRows() {
+      const cards = [...els.items.querySelectorAll(".item")];
+      rows = cards.map((card) => ({
+        name: card.querySelector(".f-name").value.trim(),
+        spec: card.querySelector(".f-spec").value.trim(),
+        unit: card.querySelector(".f-unit").value.trim() || "식",
+        qty: Number(card.querySelector(".f-qty").value || 0),
+        unitPriceIncl: Number(card.querySelector(".f-price").value || 0),
+      }));
+      calcSum();
+    }
+
+    function renderRows() {
+      els.items.innerHTML = rows
+        .map(
+          (r, i) => `<div class="item" data-i="${i}">
+            <div class="top">
+              <strong>품목 ${i + 1}</strong>
+              <button type="button" class="del" data-del="${i}">삭제</button>
+            </div>
+            <label>품명</label>
+            <input class="f-name" type="text" value="${escapeAttr(r.name)}" placeholder="예: 배구 심판대" />
+            <label>규격/설명</label>
+            <input class="f-spec" type="text" value="${escapeAttr(r.spec)}" placeholder="예: 이동식 / 7일" />
+            <div class="row3">
+              <div>
+                <label>단위</label>
+                <input class="f-unit" type="text" value="${escapeAttr(r.unit || "식")}" />
+              </div>
+              <div>
+                <label>수량</label>
+                <input class="f-qty" type="number" step="1" min="0" value="${r.qty}" />
+              </div>
+              <div>
+                <label>단가(부가세포함)</label>
+                <input class="f-price" type="number" step="1000" min="0" value="${r.unitPriceIncl}" />
+              </div>
+            </div>
+          </div>`
+        )
+        .join("");
+
+      els.items.querySelectorAll("input").forEach((el) => {
+        el.addEventListener("input", () => {
+          readDomIntoRows();
+        });
+      });
+      els.items.querySelectorAll("[data-del]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          readDomIntoRows();
+          rows.splice(Number(btn.dataset.del), 1);
+          if (!rows.length) rows = [blankRow()];
+          renderRows();
+        });
+      });
+      calcSum();
+    }
+
+    function escapeAttr(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;");
+    }
+
+    function loadPreset(pkg, replace) {
+      readDomIntoRows();
+      const mapped = (pkg.items || []).map((it) => ({
+        name: it.name,
+        spec: it.spec || "",
+        unit: it.unit || "식",
+        qty: it.qty || 1,
+        unitPriceIncl: it.unitPriceIncl || 0,
+      }));
+      rows = replace ? mapped : [...rows.filter((r) => r.name || r.unitPriceIncl), ...mapped];
+      if (!rows.length) rows = [blankRow()];
+      if (!photoPackageIds.includes(pkg.id)) photoPackageIds.push(pkg.id);
+      if (!els.docTitle.value || els.docTitle.value === "납품") {
+        els.docTitle.value = pkg.title;
+      } else if (!els.docTitle.value.includes(pkg.title)) {
+        els.docTitle.value = els.docTitle.value + " / " + pkg.title;
+      }
+      renderRows();
     }
 
     function syncEmailRequired() {
@@ -290,64 +415,50 @@
       els.date.value = meta.dateDefault;
       els.emailHint.textContent = meta.emailConfigured
         ? "SMTP 설정됨 · 발송 가능"
-        : "SMTP 미설정 · .env 채운 뒤 재실행 (지금은 PDF 생성/다운로드만 가능)";
+        : "SMTP 미설정 · Render Environment에 SMTP_PASS 필요 (PDF는 가능)";
 
-      els.packages.innerHTML = meta.packages
-        .map((p) => {
-          const sub =
-            p.id === "3_지주대임대"
-              ? `기본 ${money(p.defaultDailyIncl)}원 × ${p.defaultDays}일`
-              : `기본 ${money(p.defaultTotalIncl)}원`;
-          const amountField =
-            p.id === "3_지주대임대"
-              ? ""
-              : `<label style="margin-top:8px">금액(부가세포함)
-                  <input class="pkg-total" data-id="${p.id}" type="number" step="1000" value="${p.defaultTotalIncl}" />
-                 </label>`;
-          return `<div class="pkg">
-            <input class="pkg-check" type="checkbox" value="${p.id}" checked />
-            <div class="meta">
-              <div class="title">${p.title}</div>
-              <div class="sub">${sub}</div>
-              ${amountField}
-            </div>
-          </div>`;
-        })
+      els.presets.innerHTML = meta.packages
+        .map(
+          (p) =>
+            `<button type="button" data-preset="${p.id}">${p.title}</button>`
+        )
         .join("");
-
-      els.rentalDaily.value = meta.packages.find((p) => p.id === "3_지주대임대").defaultDailyIncl;
-      els.rentalDays.value = meta.packages.find((p) => p.id === "3_지주대임대").defaultDays;
-
-      document.querySelectorAll(".pkg-check").forEach((el) => {
-        el.addEventListener("change", syncRental);
+      els.presets.querySelectorAll("[data-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const pkg = meta.packages.find((p) => p.id === btn.dataset.preset);
+          loadPreset(pkg, false);
+        });
       });
-      syncRental();
+
+      rows = [blankRow()];
+      renderRows();
       syncEmailRequired();
     }
 
+    els.addItem.addEventListener("click", () => {
+      readDomIntoRows();
+      rows.push(blankRow());
+      renderRows();
+    });
     els.sendEmail.addEventListener("change", syncEmailRequired);
 
     els.form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const packageIds = selectedIds();
-      if (!packageIds.length) {
-        showStatus("err", "품목을 1개 이상 선택하세요.");
+      readDomIntoRows();
+      const customItems = rows.filter((r) => r.name);
+      if (!customItems.length) {
+        showStatus("err", "품명을 1개 이상 입력하세요.");
         return;
       }
 
-      const totals = {};
-      document.querySelectorAll(".pkg-total").forEach((el) => {
-        totals[el.dataset.id] = Number(el.value);
-      });
-
       const payload = {
         pin: els.pin.value,
-        packageIds,
+        title: els.docTitle.value.trim() || "납품",
+        note: els.note.value.trim(),
+        customItems,
+        photoPackageIds,
         client: els.client.value.trim(),
         date: els.date.value,
-        totals,
-        rentalDailyIncl: Number(els.rentalDaily.value),
-        rentalDays: Number(els.rentalDays.value),
         emailTo: els.emailTo.value.trim(),
         emailCc: els.emailCc.value.trim(),
         subject: els.subject.value.trim(),
@@ -365,14 +476,15 @@
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || "실패");
-
-        const lines = [
-          `완료: ${data.fileName}`,
-          `합계: ${money(data.totalSum)}원`,
-          data.emailed ? "이메일 발송 완료" : "이메일 미발송 (다운로드만)",
-          `<a href="${data.downloadUrl}" download>PDF 다운로드</a>`,
-        ];
-        showStatus("ok", lines.join("\n"));
+        showStatus(
+          "ok",
+          [
+            `완료: ${data.fileName}`,
+            `합계: ${money(data.totalSum)}원`,
+            data.emailed ? "이메일 발송 완료" : "이메일 미발송 (다운로드만)",
+            `<a href="${data.downloadUrl}" download>PDF 다운로드</a>`,
+          ].join("\n")
+        );
       } catch (err) {
         showStatus("err", err.message || String(err));
       } finally {
