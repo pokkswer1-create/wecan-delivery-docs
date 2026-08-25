@@ -452,7 +452,7 @@
             <div class="row3">
               <div><label>단위</label><input class="f-unit" type="text" value="${escapeAttr(r.unit || "식")}" /></div>
               <div><label>수량</label><input class="f-qty" type="number" step="1" min="0" value="${r.qty}" /></div>
-              <div><label>단가(부가세포함)</label><input class="f-price" type="number" step="1000" min="0" value="${r.unitPriceIncl}" /></div>
+              <div><label>단가(부가세포함)</label><input class="f-price" type="number" step="1" min="0" value="${r.unitPriceIncl}" /></div>
             </div>
           </div>`
         )
@@ -498,7 +498,7 @@
             <div class="row3">
               <div><label>단위</label><input class="c-unit" type="text" value="${escapeAttr(p.unit || "식")}" /></div>
               <div><label>기본수량</label><input class="c-qty" type="number" step="1" min="1" value="${p.qty || 1}" /></div>
-              <div><label>단가(부가세포함)</label><input class="c-price" type="number" step="1000" min="0" value="${p.unitPriceIncl || 0}" /></div>
+              <div><label>단가(부가세포함)</label><input class="c-price" type="number" step="1" min="0" value="${p.unitPriceIncl || 0}" /></div>
             </div>
           </div>`
         )
