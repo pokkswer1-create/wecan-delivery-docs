@@ -35,7 +35,7 @@
     .wrap { max-width: 520px; margin: 0 auto; }
     .app-nav {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       margin-bottom: 16px;
       padding: 4px;
@@ -252,14 +252,15 @@
 <body>
   <div class="wrap">
     <nav class="app-nav" aria-label="주요 메뉴">
-      <a class="active" href="/" aria-current="page">납품서류</a>
-      <a href="/history.html">발송이력</a>
-      <a href="/stamp.html">도장</a>
+      <a class="active" href="/" aria-current="page">서류</a>
+      <a href="/history.html">이력</a>
+      <a href="/settings.html">설정</a>
     </nav>
     <header>
       <div class="brand">WECAN</div>
       <h1>납품서류 만들기</h1>
       <p>기본 품목을 등록·수정·삭제하고, 불러와 서류를 만드세요.</p>
+      <p class="hint hidden" id="supplierWarn" style="margin-top:10px"><a href="/settings.html" style="color:var(--accent-2)">설정</a>에서 회사 정보를 먼저 넣어야 서류가 만들어집니다.</p>
     </header>
 
     <form id="form">
@@ -368,6 +369,7 @@
       form: document.getElementById("form"),
       submitBtn: document.getElementById("submitBtn"),
       status: document.getElementById("status"),
+      supplierWarn: document.getElementById("supplierWarn"),
     };
 
     let catalog = [];
@@ -677,8 +679,11 @@
       els.client.value = meta.clientDefault || "";
       els.date.value = todayLocal();
       els.emailHint.textContent = meta.emailConfigured
-        ? `발송 가능 (${meta.emailProvider || "설정됨"})`
+        ? `발송 가능 (${meta.emailProvider || "설정됨"}). 보낸사람 ${meta.mailFromName || "설정 상호"} · 회신 ${meta.mailReplyTo || "설정 메일"}`
         : "이메일 미설정";
+      if (meta.supplierComplete === false && els.supplierWarn) {
+        els.supplierWarn.classList.remove("hidden");
+      }
       rows = [blankRow()];
       renderRows();
       els.emailTo.required = els.sendEmail.checked;

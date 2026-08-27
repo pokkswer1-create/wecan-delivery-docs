@@ -2,43 +2,27 @@ const fs = require("fs");
 const path = require("path");
 const { PDFDocument } = require("pdf-lib");
 const { htmlToPdf, htmlToPdfMany, assetDataUri } = require("./pdf");
+const {
+  loadSupplier,
+  isComplete,
+  missingFields,
+  docFilePrefix,
+} = require("./supplier");
+const { loadSealDataUri, signHtml: signMarkHtml } = require("./sign-mark");
 
 const ROOT = __dirname;
 const OUT = path.join(ROOT, "out");
 const TMP = path.join(ROOT, "tmp");
 
-const SUPPLIER = {
-  name: "위캔",
-  nameEn: "wecan",
-  ceo: "김강선",
-  bizNo: "690-21-00190",
-  address: "서울특별시 동작구 동작대로29길 119, 105동 202호",
-  phone: "010-9314-0382",
-  fax: "050-7702-3076",
-  email: "pokkswer1@naver.com",
-  bank: "카카오뱅크",
-  account: "3333-14-7259532",
-  accountHolder: "김강선(위캔(wecan))",
-};
+function getSupplier() {
+  return loadSupplier(ROOT);
+}
 
 const DEFAULT_CLIENT = "";
 
-function sealDataUri() {
-  const custom = path.join(ROOT, "data", "seal.png");
-  if (fs.existsSync(custom)) {
-    const buf = fs.readFileSync(custom);
-    return `data:image/png;base64,${buf.toString("base64")}`;
-  }
-  return assetDataUri("seal_clear.png");
-}
-
 function contactEmail() {
-  return (
-    process.env.MAIL_FROM ||
-    process.env.SMTP_FROM ||
-    process.env.SMTP_USER ||
-    SUPPLIER.email
-  );
+  const s = getSupplier();
+  return s.email || process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "";
 }
 
 function fmt(n) {
@@ -356,9 +340,11 @@ function docCss() {
     gap: 8px;
   }
   .sign .who { text-align: right; line-height: 1.5; }
-  .seal {
-    width: 72px;
-    height: 72px;
+  .sign-mark {
+    max-height: 80px;
+    max-width: 160px;
+    width: auto;
+    height: auto;
     object-fit: contain;
   }
   .footer-bank {
@@ -370,15 +356,17 @@ function docCss() {
 }
 
 function supplierBoxHtml() {
+  const s = getSupplier();
+  const nameLine = s.nameEn ? `${s.name} (${s.nameEn})` : s.name;
   return `
   <div class="box">
     <h3>공급자</h3>
     <table>
-      <tr><td class="k">상호</td><td>${SUPPLIER.name} (${SUPPLIER.nameEn})</td></tr>
-      <tr><td class="k">대표자</td><td>${SUPPLIER.ceo}</td></tr>
-      <tr><td class="k">등록번호</td><td>${SUPPLIER.bizNo}</td></tr>
-      <tr><td class="k">사업장</td><td>${SUPPLIER.address}</td></tr>
-      <tr><td class="k">연락처</td><td>${SUPPLIER.phone} / ${contactEmail()}</td></tr>
+      <tr><td class="k">상호</td><td>${nameLine}</td></tr>
+      <tr><td class="k">대표자</td><td>${s.ceo}</td></tr>
+      <tr><td class="k">등록번호</td><td>${s.bizNo}</td></tr>
+      <tr><td class="k">사업장</td><td>${s.address}</td></tr>
+      <tr><td class="k">연락처</td><td>${s.phone} / ${contactEmail()}</td></tr>
     </table>
   </div>`;
 }
@@ -457,18 +445,19 @@ function totalsHtml(pkg) {
 }
 
 function signHtml() {
-  return `
-  <div class="sign">
-    <div class="who">
-      <div>상호 : ${SUPPLIER.name}</div>
-      <div>대표자 : ${SUPPLIER.ceo}</div>
-    </div>
-    <img class="seal" src="${sealDataUri()}" />
-  </div>
+  const s = getSupplier();
+  return (
+    signMarkHtml({
+      name: s.name,
+      ceo: s.ceo,
+      sealDataUri: loadSealDataUri(ROOT),
+    }) +
+    `
   <div class="footer-bank">
-    입금계좌 : ${SUPPLIER.bank} ${SUPPLIER.account} (예금주: ${SUPPLIER.accountHolder})<br/>
-    계산서 발행메일 : ${SUPPLIER.email}
-  </div>`;
+    입금계좌 : ${s.bank} ${s.account} (예금주: ${s.accountHolder})<br/>
+    계산서 발행메일 : ${s.email}
+  </div>`
+  );
 }
 
 function makeDocSheet(pkg, docType, ctx) {
@@ -575,6 +564,22 @@ ${fontHead()}
 </body></html>`;
 }
 
+function resolveDataOrAsset(imageFile) {
+  const custom = path.join(ROOT, "data", imageFile);
+  if (fs.existsSync(custom)) {
+    const buf = fs.readFileSync(custom);
+    const ext = path.extname(imageFile).toLowerCase();
+    const mime =
+      ext === ".jpg" || ext === ".jpeg"
+        ? "image/jpeg"
+        : ext === ".webp"
+          ? "image/webp"
+          : "image/png";
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  }
+  return assetDataUri(imageFile);
+}
+
 function makeEmbedImageHtml(imageFile, caption) {
   return `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"/>
@@ -588,8 +593,17 @@ ${fontHead()}
 </style></head>
 <body>
   <h1>${caption}</h1>
-  <div class="wrap"><img src="${assetDataUri(imageFile)}"/></div>
+  <div class="wrap"><img src="${resolveDataOrAsset(imageFile)}"/></div>
 </body></html>`;
+}
+
+function resetBizBankCache() {
+  bizBankCachePaths = null;
+  try {
+    fs.rmSync(path.join(TMP, "_bizbank_cache"), { recursive: true, force: true });
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 async function mergePdfs(paths, outPath) {
@@ -686,7 +700,7 @@ function resolvePackages(selection = {}) {
       {
         id: "custom",
         title,
-        fileName: `위캔_${safeTitle}_납품서류.pdf`,
+        fileName: `${docFilePrefix(getSupplier())}_${safeTitle}_납품서류.pdf`,
         totalIncl,
         items,
         photos: [...photoSet],
@@ -802,13 +816,19 @@ async function buildCombined(packages, options = {}) {
   parts.push(...bizBank);
 
   const titles = packages.map((p) => p.title).join("_");
-  const fileName = `위캔_납품서류_통합_${titles.replace(/\s+/g, "")}.pdf`;
+  const fileName = `${docFilePrefix(getSupplier())}_납품서류_통합_${titles.replace(/\s+/g, "")}.pdf`;
   const outPath = path.join(OUT, fileName);
   await mergePdfs(parts, outPath);
   return outPath;
 }
 
 async function buildFromRequest(req) {
+  const supplier = getSupplier();
+  if (!isComplete(supplier)) {
+    const miss = missingFields(supplier).join(", ");
+    throw new Error("설정에서 공급자 정보를 먼저 저장하세요. 비어 있음: " + miss);
+  }
+
   fs.mkdirSync(OUT, { recursive: true });
   fs.mkdirSync(TMP, { recursive: true });
 
@@ -857,7 +877,8 @@ async function main() {
 }
 
 module.exports = {
-  SUPPLIER,
+  getSupplier,
+  resetBizBankCache,
   DEFAULT_CLIENT,
   PACKAGE_TEMPLATES,
   PACKAGES,

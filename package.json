@@ -4,7 +4,8 @@
   "scripts": {
     "generate": "node generate.js",
     "start": "node server.js",
-    "web": "node server.js"
+    "web": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

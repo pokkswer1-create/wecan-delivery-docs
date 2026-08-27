@@ -34,7 +34,7 @@ function doPost(e) {
 
     var options = {
       attachments: [blob],
-      name: d.fromName || "위캔(wecan)",
+      name: d.fromName || "납품서류",
       htmlBody: html,
     };
     if (d.replyTo) options.replyTo = d.replyTo;

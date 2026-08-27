@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>설정 · 납품서류</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --line: #2c3848;
+      --text: #eef3f8;
+      --muted: #93a4b8;
+      --accent: #1f8a70;
+      --accent-2: #f0b429;
+      --danger: #e35d6a;
+      --ok: #3ecf8e;
+      --radius: 14px;
+      --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #1d3a33 0%, transparent 55%),
+        radial-gradient(900px 400px at 100% 0%, #2a2416 0%, transparent 50%),
+        var(--bg);
+      padding: 20px 16px 40px;
+    }
+    .wrap { max-width: 520px; margin: 0 auto; }
+    .app-nav {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 16px;
+      padding: 4px;
+      background: #12181f;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .app-nav a {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 11px 6px;
+      border-radius: 9px;
+    }
+    .app-nav a.active {
+      background: color-mix(in srgb, var(--accent) 28%, #1a222c);
+      color: var(--text);
+    }
+    header { margin-bottom: 18px; }
+    header .brand {
+      font-size: 13px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: 6px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+    header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .card {
+      background: color-mix(in srgb, var(--panel) 92%, white 8%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="password"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #12181f;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 16px;
+      margin-bottom: 12px;
+      outline: none;
+      font-family: inherit;
+    }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.primary {
+      background: linear-gradient(180deg, #2aa883, var(--accent));
+      color: #fff;
+    }
+    button.primary:disabled { opacity: 0.55; cursor: wait; }
+    button.ghost {
+      margin-top: 8px;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+    }
+    button.del {
+      width: auto;
+      padding: 6px 10px;
+      margin: 0;
+      background: transparent;
+      border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+      color: #ffb4bc;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .status {
+      display: none;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .status.show { display: block; }
+    .status.ok {
+      background: color-mix(in srgb, var(--ok) 18%, #12181f);
+      border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+      color: #d8ffe9;
+    }
+    .status.err {
+      background: color-mix(in srgb, var(--danger) 18%, #12181f);
+      border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+      color: #ffd6db;
+    }
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: -4px;
+      margin-bottom: 10px;
+    }
+    .hidden { display: none !important; }
+    .file-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #12181f;
+      margin-bottom: 10px;
+    }
+    .file-row strong { font-size: 13px; }
+    .file-row .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .file-row .actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+    .file-row input[type="file"] { display: none; }
+    .pick {
+      width: auto;
+      padding: 6px 10px;
+      margin: 0;
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .ok-dot { color: var(--ok); }
+    .miss-dot { color: var(--accent-2); }
+    .preview {
+      display: block;
+      margin: 0 0 12px;
+      max-height: 110px;
+      max-width: 100%;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="app-nav" aria-label="주요 메뉴">
+      <a href="/">서류</a>
+      <a href="/history.html">이력</a>
+      <a class="active" href="/settings.html" aria-current="page">설정</a>
+    </nav>
+    <header>
+      <div class="brand">WECAN</div>
+      <h1>공급자 설정</h1>
+      <p>PDF·메일에 찍히는 회사 정보입니다. 코드가 아니라 여기서 바꿉니다.</p>
+    </header>
+
+    <div class="card">
+      <h2>접속</h2>
+      <label for="pin">비밀번호</label>
+      <input id="pin" type="password" autocomplete="current-password" />
+      <button class="ghost" type="button" id="unlockBtn" style="margin-top:0">비밀번호 확인</button>
+      <div class="status" id="unlockStatus"></div>
+    </div>
+
+    <div id="lockedNote" class="card">
+      <p class="hint" style="margin:0">비밀번호를 확인하면 상호·계좌·도장/사인을 고칠 수 있습니다.</p>
+    </div>
+
+    <form id="form" class="hidden">
+      <div class="card">
+        <h2>회사</h2>
+        <div id="completeHint" class="hint"></div>
+        <label for="name">상호</label>
+        <input id="name" type="text" autocomplete="organization" />
+        <label for="nameEn">영문 상호 (PDF 파일명, 선택)</label>
+        <input id="nameEn" type="text" placeholder="없으면 한글 상호 사용" />
+        <label for="ceo">대표</label>
+        <input id="ceo" type="text" />
+        <label for="bizNo">사업자번호</label>
+        <input id="bizNo" type="text" inputmode="numeric" />
+        <label for="address">주소</label>
+        <input id="address" type="text" autocomplete="street-address" />
+        <label for="phone">전화</label>
+        <input id="phone" type="tel" />
+        <label for="email">메일 (거래처 회신용)</label>
+        <input id="email" type="email" />
+        <p class="hint">거래처가 답장하면 여기로 옵니다. 보낸 사람 주소는 서비스 메일입니다.</p>
+      </div>
+
+      <div class="card">
+        <h2>입금 계좌</h2>
+        <label for="bank">은행</label>
+        <input id="bank" type="text" />
+        <label for="account">계좌번호</label>
+        <input id="account" type="text" inputmode="numeric" />
+        <label for="accountHolder">예금주</label>
+        <input id="accountHolder" type="text" />
+        <button class="primary" type="submit" id="saveBtn">회사 정보 저장</button>
+        <div class="status" id="saveStatus"></div>
+      </div>
+
+      <div class="card">
+        <h2>첨부 이미지</h2>
+        <p class="hint">도장이나 사인을 사진으로 찍어서 올리세요. 없으면 서류 서명란에 안 찍힙니다. 사업자증·통장도 여기.</p>
+        <div class="file-row" data-kind="seal">
+          <div>
+            <strong>도장 또는 사인</strong>
+            <div class="meta" data-file-status>확인 중</div>
+          </div>
+          <div class="actions">
+            <button type="button" class="pick" data-pick>올리기</button>
+            <button type="button" class="del" data-remove>삭제</button>
+            <input type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+        </div>
+        <img id="sealPreview" class="preview hidden" alt="올린 도장 또는 사인" />
+        <div class="file-row" data-kind="biz">
+          <div>
+            <strong>사업자등록증</strong>
+            <div class="meta" data-file-status>확인 중</div>
+          </div>
+          <div class="actions">
+            <button type="button" class="pick" data-pick>올리기</button>
+            <button type="button" class="del" data-remove>삭제</button>
+            <input type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+        </div>
+        <div class="file-row" data-kind="bank">
+          <div>
+            <strong>통장 사본</strong>
+            <div class="meta" data-file-status>확인 중</div>
+          </div>
+          <div class="actions">
+            <button type="button" class="pick" data-pick>올리기</button>
+            <button type="button" class="del" data-remove>삭제</button>
+            <input type="file" accept="image/png,image/jpeg,image/webp" />
+          </div>
+        </div>
+        <div class="status" id="fileStatus"></div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    const FIELDS = [
+      "name", "nameEn", "ceo", "bizNo", "address",
+      "phone", "email", "bank", "account", "accountHolder",
+    ];
+    const LABELS = {
+      name: "상호", nameEn: "영문 상호", ceo: "대표", bizNo: "사업자번호",
+      address: "주소", phone: "전화", email: "메일", bank: "은행",
+      account: "계좌번호", accountHolder: "예금주",
+    };
+
+    const els = {
+      pin: document.getElementById("pin"),
+      unlockBtn: document.getElementById("unlockBtn"),
+      unlockStatus: document.getElementById("unlockStatus"),
+      form: document.getElementById("form"),
+      lockedNote: document.getElementById("lockedNote"),
+      completeHint: document.getElementById("completeHint"),
+      saveBtn: document.getElementById("saveBtn"),
+      saveStatus: document.getElementById("saveStatus"),
+      fileStatus: document.getElementById("fileStatus"),
+      sealPreview: document.getElementById("sealPreview"),
+    };
+
+    async function readJson(res) {
+      const raw = await res.text();
+      const trimmed = (raw || "").trim();
+      if (!trimmed) throw new Error(`서버 응답이 비어 있습니다. (${res.status})`);
+      if (trimmed[0] === "<") {
+        throw new Error("서버가 잠시 응답하지 못했습니다. 다시 눌러 주세요.");
+      }
+      try {
+        return JSON.parse(trimmed);
+      } catch (_) {
+        throw new Error(`서버 응답을 읽지 못했습니다. (${res.status})`);
+      }
+    }
+
+    function show(el, kind, msg) {
+      el.className = "status show " + kind;
+      el.textContent = msg;
+    }
+
+    function fillForm(supplier) {
+      for (const k of FIELDS) {
+        const input = document.getElementById(k);
+        if (input) input.value = supplier[k] || "";
+      }
+    }
+
+    function readForm() {
+      const supplier = {};
+      for (const k of FIELDS) {
+        supplier[k] = (document.getElementById(k).value || "").trim();
+      }
+      return supplier;
+    }
+
+    function setCompleteHint(complete, missing) {
+      if (complete) {
+        els.completeHint.innerHTML = '<span class="ok-dot">서류에 쓸 정보가 다 있습니다.</span>';
+        return;
+      }
+      const names = (missing || []).map((k) => LABELS[k] || k).join(", ");
+      els.completeHint.innerHTML =
+        '<span class="miss-dot">아직 비어 있음: ' + names + "</span>";
+    }
+
+    function setSealPreview(on) {
+      if (!els.sealPreview) return;
+      if (on) {
+        els.sealPreview.src =
+          "/api/supplier-file?kind=seal&pin=" +
+          encodeURIComponent(els.pin.value) +
+          "&t=" +
+          Date.now();
+        els.sealPreview.classList.remove("hidden");
+      } else {
+        els.sealPreview.removeAttribute("src");
+        els.sealPreview.classList.add("hidden");
+      }
+    }
+
+    function setFileStatus(files) {
+      const map = { seal: "도장 또는 사인", biz: "사업자등록증", bank: "통장 사본" };
+      document.querySelectorAll(".file-row").forEach((row) => {
+        const kind = row.dataset.kind;
+        const on = !!(files && files[kind]);
+        const meta = row.querySelector("[data-file-status]");
+        meta.innerHTML = on
+          ? '<span class="ok-dot">등록됨</span>'
+          : '<span class="miss-dot">없음</span>';
+        meta.title = map[kind] || kind;
+      });
+      setSealPreview(!!(files && files.seal));
+    }
+
+    async function loadSupplier() {
+      const pin = els.pin.value;
+      const res = await fetch("/api/supplier?pin=" + encodeURIComponent(pin));
+      const data = await readJson(res);
+      if (!data.ok) throw new Error(data.error || "불러오기 실패");
+      fillForm(data.supplier || {});
+      setCompleteHint(data.complete, data.missing);
+      setFileStatus(data.files);
+      els.form.classList.remove("hidden");
+      els.lockedNote.classList.add("hidden");
+    }
+
+    async function unlock() {
+      if (!els.pin.value) {
+        show(els.unlockStatus, "err", "비밀번호를 입력하세요.");
+        return;
+      }
+      try {
+        await loadSupplier();
+        show(els.unlockStatus, "ok", "확인됨. 아래를 고치고 저장하세요.");
+      } catch (err) {
+        show(els.unlockStatus, "err", err.message);
+      }
+    }
+
+    els.unlockBtn.addEventListener("click", unlock);
+    els.pin.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        unlock();
+      }
+    });
+
+    els.form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      els.saveBtn.disabled = true;
+      try {
+        const res = await fetch("/api/supplier", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: els.pin.value, supplier: readForm() }),
+        });
+        const data = await readJson(res);
+        if (!data.ok) throw new Error(data.error || "저장 실패");
+        fillForm(data.supplier || {});
+        setCompleteHint(data.complete, data.missing);
+        show(els.saveStatus, "ok", data.complete
+          ? "저장됨. 이제 서류에 이 정보가 찍힙니다."
+          : "저장됨. 아직 빈 칸이 있으면 서류가 안 만들어집니다.");
+      } catch (err) {
+        show(els.saveStatus, "err", err.message);
+      } finally {
+        els.saveBtn.disabled = false;
+      }
+    });
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
+        r.readAsDataURL(file);
+      });
+    }
+
+    document.querySelectorAll(".file-row").forEach((row) => {
+      const kind = row.dataset.kind;
+      const input = row.querySelector('input[type="file"]');
+      row.querySelector("[data-pick]").addEventListener("click", () => input.click());
+      row.querySelector("[data-remove]").addEventListener("click", async () => {
+        try {
+          const res = await fetch("/api/supplier-file", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pin: els.pin.value, kind }),
+          });
+          const data = await readJson(res);
+          if (!data.ok) throw new Error(data.error || "삭제 실패");
+          setFileStatus(data.files);
+          show(els.fileStatus, "ok", "삭제됨.");
+        } catch (err) {
+          show(els.fileStatus, "err", err.message);
+        }
+      });
+      input.addEventListener("change", async () => {
+        const file = input.files && input.files[0];
+        input.value = "";
+        if (!file) return;
+        try {
+          const image = await readFileAsDataUrl(file);
+          if (!/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(image)) {
+            throw new Error("png, jpg, webp만 올립니다.");
+          }
+          const res = await fetch("/api/supplier-file", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pin: els.pin.value, kind, image }),
+          });
+          const data = await readJson(res);
+          if (!data.ok) throw new Error(data.error || "올리기 실패");
+          setFileStatus(data.files);
+          show(els.fileStatus, "ok", "올렸습니다.");
+        } catch (err) {
+          show(els.fileStatus, "err", err.message);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

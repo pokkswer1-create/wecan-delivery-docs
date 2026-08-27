@@ -33,7 +33,7 @@
     .wrap { max-width: 560px; margin: 0 auto; }
     .app-nav {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       margin-bottom: 16px;
       padding: 4px;
@@ -145,9 +145,9 @@
 <body>
   <div class="wrap">
     <nav class="app-nav" aria-label="주요 메뉴">
-      <a href="/">납품서류</a>
-      <a class="active" href="/history.html" aria-current="page">발송이력</a>
-      <a href="/stamp.html">도장</a>
+      <a href="/">서류</a>
+      <a class="active" href="/history.html" aria-current="page">이력</a>
+      <a href="/settings.html">설정</a>
     </nav>
     <header>
       <div class="brand">WECAN</div>

@@ -6,7 +6,8 @@ const os = require("os");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const {
-  SUPPLIER,
+  getSupplier,
+  resetBizBankCache,
   DEFAULT_CLIENT,
   PACKAGE_TEMPLATES,
   OUT,
@@ -14,6 +15,8 @@ const {
   todayISO,
   fmt,
 } = require("./generate");
+const { saveSupplier, isComplete, missingFields } = require("./supplier");
+const { mailEnvelope } = require("./mail-envelope");
 
 const PORT = Number(process.env.PORT || 3780);
 const FORM_PIN = process.env.FORM_PIN || "515050";
@@ -21,7 +24,7 @@ const RECEIPTS_DIR = path.join(__dirname, "data", "receipts");
 const MAIL_LOG_PATH = path.join(__dirname, "data", "mail-log.json");
 const app = express();
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "8mb" }));
 app.use((req, res, next) => {
   if (req.path === "/" || req.path.endsWith(".html")) {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -42,14 +45,8 @@ app.use("/downloads", express.static(OUT));
 const PUBLIC_DIR = path.join(__dirname, "public");
 const APP_VERSION = "2026-07-31-no-receipt-body";
 
-app.get("/stamp", (_req, res) => {
-  res.set("Cache-Control", "no-store");
-  res.sendFile(path.join(PUBLIC_DIR, "stamp.html"));
-});
-
-app.get("/stamp.html", (_req, res) => {
-  res.set("Cache-Control", "no-store");
-  res.sendFile(path.join(PUBLIC_DIR, "stamp.html"));
+app.get(["/stamp", "/stamp.html"], (_req, res) => {
+  res.redirect(301, "/settings.html");
 });
 
 app.get("/history", (_req, res) => {
@@ -60,6 +57,16 @@ app.get("/history", (_req, res) => {
 app.get("/history.html", (_req, res) => {
   res.set("Cache-Control", "no-store");
   res.sendFile(path.join(PUBLIC_DIR, "history.html"));
+});
+
+app.get("/settings", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(PUBLIC_DIR, "settings.html"));
+});
+
+app.get("/settings.html", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.sendFile(path.join(PUBLIC_DIR, "settings.html"));
 });
 
 function lanAddresses() {
@@ -136,34 +143,34 @@ function buildMailContent({
   emailCc,
   receiptUrl,
 }) {
-  const fromName = "위캔(wecan)";
-  const fromEmail =
-    process.env.MAIL_FROM ||
-    process.env.SMTP_FROM ||
-    process.env.SMTP_USER ||
-    SUPPLIER.email;
-  const replyTo = process.env.MAIL_REPLY_TO || fromEmail;
+  const s = getSupplier();
+  const env = {
+    MAIL_FROM: process.env.MAIL_FROM,
+    SMTP_FROM: process.env.SMTP_FROM,
+  };
+  const { fromName, fromEmail: serviceFrom, replyTo } = mailEnvelope(s, env);
+  const fromEmail = serviceFrom || process.env.SMTP_USER || "";
   const mailSubject =
-    subject || `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`;
+    subject || `[${fromName}] ${titles} 납품서류 (${fmt(totalSum)}원)`;
+  const ask = s.email || replyTo || fromEmail;
   const textLines = [
     `${client || DEFAULT_CLIENT} 귀중`,
     "",
-    "위캔 납품서류를 보내드립니다.",
+    `${fromName} 납품서류를 보내드립니다.`,
     `품목: ${titles}`,
     `합계(부가세포함): ${fmt(totalSum)}원`,
     `작성일: ${date || todayISO()}`,
     "",
-    `입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}`,
-    `예금주: ${SUPPLIER.accountHolder}`,
-    `문의: ${SUPPLIER.phone} / ${fromEmail}`,
+    `입금계좌: ${s.bank} ${s.account}`,
+    `예금주: ${s.accountHolder}`,
+    `문의: ${s.phone} / ${ask}`,
   ];
   const text = textLines.join("\n");
-  // 수신확인 링크/안내/첨부 문구는 메일 본문에 넣지 않음 (첨부 PDF만)
   const html = [
     `<p>${client || DEFAULT_CLIENT} 귀중</p>`,
-    `<p>위캔 납품서류를 보내드립니다.</p>`,
+    `<p>${fromName} 납품서류를 보내드립니다.</p>`,
     `<p>품목: ${titles}<br>합계(부가세포함): ${fmt(totalSum)}원<br>작성일: ${date || todayISO()}</p>`,
-    `<p>입금계좌: ${SUPPLIER.bank} ${SUPPLIER.account}<br>예금주: ${SUPPLIER.accountHolder}<br>문의: ${SUPPLIER.phone} / ${fromEmail}</p>`,
+    `<p>입금계좌: ${s.bank} ${s.account}<br>예금주: ${s.accountHolder}<br>문의: ${s.phone} / ${ask}</p>`,
   ].join("");
   const pdfBase64 = fs.readFileSync(filePath).toString("base64");
   return {
@@ -231,7 +238,7 @@ async function sendViaGas(mail) {
       fileName: mail.fileName,
       pdfBase64: mail.pdfBase64,
       fromName: mail.fromName,
-      replyTo: mail.replyTo,
+      replyTo: mail.replyTo || undefined,
     }),
   });
   const text = await res.text();
@@ -257,7 +264,7 @@ async function sendViaResend(mail) {
       from: `${mail.fromName} <${mail.fromEmail}>`,
       to: [mail.emailTo],
       cc: mail.emailCc ? [mail.emailCc] : undefined,
-      reply_to: mail.replyTo,
+      reply_to: mail.replyTo || undefined,
       subject: mail.mailSubject,
       text: mail.text,
       html: mail.html,
@@ -276,7 +283,7 @@ async function sendViaBrevo(mail) {
   const payload = {
     sender: { name: mail.fromName, email: mail.fromEmail },
     to: [{ email: mail.emailTo }],
-    replyTo: { email: mail.replyTo },
+    replyTo: mail.replyTo ? { email: mail.replyTo } : undefined,
     subject: mail.mailSubject,
     textContent: mail.text,
     htmlContent: mail.html,
@@ -315,7 +322,7 @@ async function sendViaSendgrid(mail) {
     body: JSON.stringify({
       personalizations,
       from: { email: mail.fromEmail, name: mail.fromName },
-      reply_to: { email: mail.replyTo },
+      reply_to: mail.replyTo ? { email: mail.replyTo } : undefined,
       subject: mail.mailSubject,
       content: [
         { type: "text/plain", value: mail.text },
@@ -343,7 +350,7 @@ async function sendViaSmtp(mail) {
     from: `"${mail.fromName}" <${mail.fromEmail}>`,
     to: mail.emailTo,
     cc: mail.emailCc || undefined,
-    replyTo: mail.replyTo,
+    replyTo: mail.replyTo || undefined,
     subject: mail.mailSubject,
     text: mail.text,
     html: mail.html,
@@ -358,6 +365,11 @@ async function sendDeliveryEmail(opts) {
     );
   }
   const mail = buildMailContent(opts);
+  if (!process.env.GAS_MAIL_URL && !mail.fromEmail) {
+    throw new Error(
+      "MAIL_FROM에 서비스 발신 메일을 넣으세요. 회신은 설정의 공급자 메일입니다."
+    );
+  }
   if (process.env.GAS_MAIL_URL) return sendViaGas(mail);
   if (process.env.RESEND_API_KEY) return sendViaResend(mail);
   if (process.env.BREVO_API_KEY) return sendViaBrevo(mail);
@@ -370,7 +382,14 @@ app.get("/api/meta", (_req, res) => {
     version: APP_VERSION,
     clientDefault: DEFAULT_CLIENT,
     dateDefault: todayISO(),
-    supplierEmail: process.env.MAIL_FROM || process.env.SMTP_FROM || SUPPLIER.email,
+    supplierEmail: getSupplier().email || "",
+    mailFromName: mailEnvelope(getSupplier(), process.env).fromName,
+    mailFromAddress:
+      mailEnvelope(getSupplier(), process.env).fromEmail ||
+      process.env.SMTP_USER ||
+      "",
+    mailReplyTo: mailEnvelope(getSupplier(), process.env).replyTo,
+    supplierComplete: isComplete(getSupplier()),
     packages: readPresets().presets.map((p) => ({
       id: p.id,
       title: p.title,
@@ -479,40 +498,117 @@ app.put("/api/presets", (req, res) => {
   }
 });
 
-const SEAL_PATH = path.join(__dirname, "data", "seal.png");
+const { mimeFromBuffer } = require("./sign-mark");
 
-app.put("/api/seal", (req, res) => {
+app.get("/api/supplier-file", (req, res) => {
+  if (!pinOk(req.query.pin)) {
+    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+  }
+  const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
+  const file = names[req.query.kind];
+  if (!file) {
+    return res.status(400).json({ ok: false, error: "kind는 seal, biz, bank 중 하나여야 합니다." });
+  }
+  const dest = path.join(__dirname, "data", file);
+  if (!fs.existsSync(dest)) {
+    return res.status(404).json({ ok: false, error: "파일이 없습니다." });
+  }
+  const buf = fs.readFileSync(dest);
+  res.set("Cache-Control", "no-store");
+  res.type(mimeFromBuffer(buf)).send(buf);
+});
+
+function pinOk(pin) {
+  return String(pin || "") === String(FORM_PIN);
+}
+
+function supplierFiles() {
+  const dir = path.join(__dirname, "data");
+  return {
+    seal: fs.existsSync(path.join(dir, "seal.png")),
+    biz: fs.existsSync(path.join(dir, "biz_reg.png")),
+    bank: fs.existsSync(path.join(dir, "bank.png")),
+  };
+}
+
+app.get("/api/supplier", (req, res) => {
+  if (!pinOk(req.query.pin)) {
+    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+  }
+  const supplier = getSupplier();
+  res.json({
+    ok: true,
+    supplier,
+    complete: isComplete(supplier),
+    missing: missingFields(supplier),
+    files: supplierFiles(),
+  });
+});
+
+app.put("/api/supplier", (req, res) => {
   try {
-    const { pin, image } = req.body || {};
-    if (String(pin || "") !== String(FORM_PIN)) {
+    const { pin, supplier } = req.body || {};
+    if (!pinOk(pin)) {
       return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
     }
-    const m = String(image || "").match(/^data:image\/png;base64,(.+)$/);
-    if (!m) {
-      return res.status(400).json({ ok: false, error: "PNG 도장 이미지가 필요합니다." });
-    }
-    const buf = Buffer.from(m[1], "base64");
-    if (buf.length < 200 || buf.length > 2_000_000) {
-      return res.status(400).json({ ok: false, error: "도장 이미지 크기가 올바르지 않습니다." });
-    }
-    fs.mkdirSync(path.dirname(SEAL_PATH), { recursive: true });
-    fs.writeFileSync(SEAL_PATH, buf);
-    res.json({ ok: true });
+    const saved = saveSupplier(__dirname, supplier);
+    res.json({
+      ok: true,
+      supplier: saved,
+      complete: isComplete(saved),
+      missing: missingFields(saved),
+    });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message || "도장 저장 실패" });
+    res.status(500).json({ ok: false, error: err.message || "저장 실패" });
   }
 });
 
-app.delete("/api/seal", (req, res) => {
+app.put("/api/supplier-file", (req, res) => {
   try {
-    const { pin } = req.body || {};
-    if (String(pin || "") !== String(FORM_PIN)) {
+    const { pin, kind, image } = req.body || {};
+    if (!pinOk(pin)) {
       return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
     }
-    if (fs.existsSync(SEAL_PATH)) fs.unlinkSync(SEAL_PATH);
-    res.json({ ok: true });
+    const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
+    const file = names[kind];
+    if (!file) {
+      return res.status(400).json({ ok: false, error: "kind는 seal, biz, bank 중 하나여야 합니다." });
+    }
+    const m = String(image || "").match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/i);
+    if (!m) {
+      return res.status(400).json({ ok: false, error: "이미지(data URL)가 필요합니다." });
+    }
+    const buf = Buffer.from(m[2], "base64");
+    if (buf.length < 200 || buf.length > 6_000_000) {
+      return res.status(400).json({ ok: false, error: "이미지 크기가 올바르지 않습니다." });
+    }
+    const dest = path.join(__dirname, "data", file);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, buf);
+    if (kind !== "seal") resetBizBankCache();
+    res.json({ ok: true, files: supplierFiles() });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message || "도장 복원 실패" });
+    res.status(500).json({ ok: false, error: err.message || "파일 저장 실패" });
+  }
+});
+
+app.delete("/api/supplier-file", (req, res) => {
+  try {
+    const { pin, kind } = req.body || {};
+    if (!pinOk(pin)) {
+      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
+    }
+    const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
+    const file = names[kind];
+    if (!file) {
+      return res.status(400).json({ ok: false, error: "kind는 seal, biz, bank 중 하나여야 합니다." });
+    }
+    const dest = path.join(__dirname, "data", file);
+    if (fs.existsSync(dest)) fs.unlinkSync(dest);
+    if (kind !== "seal") resetBizBankCache();
+    res.json({ ok: true, files: supplierFiles() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "삭제 실패" });
   }
 });
 
@@ -584,7 +680,7 @@ app.post("/api/generate", async (req, res) => {
         fs.copyFileSync(result.outPath, receiptPath);
         receiptUrl = `${publicBase(req)}/r/${receiptId}`;
         const mailSubject =
-          subject || `[위캔] ${titles} 납품서류 (${fmt(totalSum)}원)`;
+          subject || `[${getSupplier().name || "납품서류"}] ${titles} 납품서류 (${fmt(totalSum)}원)`;
         await sendDeliveryEmail({
           client: client || DEFAULT_CLIENT,
           date: date || todayISO(),

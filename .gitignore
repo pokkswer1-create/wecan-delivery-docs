@@ -3,6 +3,8 @@ tmp/
 out/
 .env
 data/seal.png
+data/biz_reg.png
+data/bank.png
 data/mail-log.json
 data/receipts/
 _smtp_pass.txt
