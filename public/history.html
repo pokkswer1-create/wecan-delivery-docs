@@ -104,6 +104,29 @@
       border: 1px solid var(--line);
     }
     .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.45; }
+    a.google-btn {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      background: #fff;
+      color: #1a222c;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .user-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .user-bar a { color: var(--accent-2); font-weight: 700; text-decoration: none; }
+    .hidden { display: none !important; }
     .status { min-height: 18px; font-size: 13px; margin-top: 4px; }
     .status.ok { color: var(--ok); }
     .status.err { color: var(--danger); }
@@ -155,27 +178,34 @@
       <p>메일 발송과 <strong style="color:var(--ok)">수신확인(PDF 다운로드)</strong>을 확인합니다. 상대가 수신확인 링크로 PDF를 받으면 확정됩니다.</p>
     </header>
 
-    <div class="card">
-      <h2>접속</h2>
-      <label for="pin">비밀번호</label>
-      <input id="pin" type="password" autocomplete="current-password" />
-      <button type="button" id="loadBtn">이력 불러오기</button>
-      <button class="ghost" type="button" id="refreshBtn">새로고침</button>
-      <div class="status" id="status"></div>
+    <div class="card" id="loginCard">
+      <h2>구글 로그인</h2>
+      <p class="hint">로그인하면 이 계정이 보낸 이력을 봅니다.</p>
+      <a class="google-btn" href="/auth/google">Google로 로그인</a>
+      <div class="status" id="authError"></div>
+    </div>
+    <div class="user-bar hidden" id="userBar">
+      <span id="userEmail"></span>
+      <a href="/auth/logout">로그아웃</a>
     </div>
 
-    <div class="card">
+    <div class="card hidden" id="listCard">
       <h2>목록</h2>
       <p class="hint">수신확인 = 상대가 메일 속 「PDF 받고 수신확인」 링크로 다운로드한 경우만 표시됩니다. 첨부파일만 연 경우는 추적되지 않습니다.</p>
-      <div id="list" class="empty">비밀번호를 입력하고 불러오세요.</div>
+      <button type="button" id="refreshBtn">새로고침</button>
+      <div class="status" id="status"></div>
+      <div id="list" class="empty">불러오는 중…</div>
     </div>
   </div>
 
   <script>
     const LOCAL_KEY = "wecan_mail_log_v1";
     const els = {
-      pin: document.getElementById("pin"),
-      loadBtn: document.getElementById("loadBtn"),
+      loginCard: document.getElementById("loginCard"),
+      userBar: document.getElementById("userBar"),
+      userEmail: document.getElementById("userEmail"),
+      authError: document.getElementById("authError"),
+      listCard: document.getElementById("listCard"),
       refreshBtn: document.getElementById("refreshBtn"),
       status: document.getElementById("status"),
       list: document.getElementById("list"),
@@ -266,11 +296,6 @@
     }
 
     async function load() {
-      const pin = String(els.pin.value || "").trim();
-      if (!pin) {
-        setStatus("err", "비밀번호를 입력하세요. (납품서류와 동일)");
-        return;
-      }
       setStatus("", "불러오는 중…");
       const localItems = readLocal();
       let serverItems = [];
@@ -279,7 +304,7 @@
         const res = await fetch("/api/mail-log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin }),
+          body: JSON.stringify({}),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) {
@@ -326,13 +351,33 @@
       return escapeHtml(s);
     }
 
-    els.loadBtn.addEventListener("click", load);
-    els.refreshBtn.addEventListener("click", load);
-    els.pin.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        load();
+    async function init() {
+      const q = new URLSearchParams(location.search);
+      const authErr = q.get("auth_error") || "";
+      if (authErr) {
+        els.authError.className = "status err";
+        els.authError.textContent = authErr;
       }
+      const me = await fetch("/api/me").then((r) => r.json());
+      if (!me.loggedIn) {
+        if (!me.googleConfigured && !authErr) {
+          els.authError.className = "status err";
+          els.authError.textContent =
+            "구글 로그인이 아직 설정되지 않았습니다. GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET을 넣으세요.";
+        }
+        return;
+      }
+      els.loginCard.classList.add("hidden");
+      els.userBar.classList.remove("hidden");
+      els.listCard.classList.remove("hidden");
+      els.userEmail.textContent = me.email || "";
+      await load();
+    }
+
+    els.refreshBtn.addEventListener("click", load);
+    init().catch((err) => {
+      els.authError.className = "status err";
+      els.authError.textContent = err.message || String(err);
     });
   </script>
 </body>

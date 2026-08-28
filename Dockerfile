@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 
-COPY generate.js pdf.js server.js ./
+COPY *.js ./
 COPY public ./public
 COPY assets ./assets
 COPY data ./data

@@ -7,6 +7,7 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const {
   getSupplier,
+  setActiveDataDir,
   resetBizBankCache,
   DEFAULT_CLIENT,
   PACKAGE_TEMPLATES,
@@ -15,14 +16,50 @@ const {
   todayISO,
   fmt,
 } = require("./generate");
-const { saveSupplier, isComplete, missingFields } = require("./supplier");
+const { saveSupplierToDataDir, isComplete, missingFields } = require("./supplier");
 const { mailEnvelope } = require("./mail-envelope");
+const {
+  userDir,
+  listUserIds,
+  migrateLegacyIfFirstUser,
+  signSession,
+  readSession,
+  sessionCookie,
+  clearSessionCookie,
+  saveGoogleTokens,
+  loadGoogleTokens,
+  getCookie,
+} = require("./accounts");
+const {
+  isGoogleConfigured,
+  googleAuthUrl,
+  exchangeGoogleCode,
+  sendViaGmailApi,
+} = require("./google-oauth");
 
 const PORT = Number(process.env.PORT || 3780);
-const FORM_PIN = process.env.FORM_PIN || "515050";
-const RECEIPTS_DIR = path.join(__dirname, "data", "receipts");
-const MAIL_LOG_PATH = path.join(__dirname, "data", "mail-log.json");
+const ROOT_DATA = path.join(__dirname, "data");
+const RECEIPTS_DIR = path.join(ROOT_DATA, "receipts");
 const app = express();
+
+function sessionSecret() {
+  return String(process.env.SESSION_SECRET || process.env.GOOGLE_CLIENT_SECRET || "").trim();
+}
+
+function requireUser(req, res, next) {
+  if (!req.user || !req.userDir) {
+    return res.status(401).json({ ok: false, error: "구글 로그인이 필요합니다." });
+  }
+  next();
+}
+
+function mailLogPath(dir) {
+  return path.join(dir || ROOT_DATA, "mail-log.json");
+}
+
+function presetsPath(dir) {
+  return path.join(dir || ROOT_DATA, "presets.json");
+}
 
 app.use(express.json({ limit: "8mb" }));
 app.use((req, res, next) => {
@@ -40,6 +77,21 @@ app.use(express.static(path.join(__dirname, "public"), {
     }
   },
 }));
+app.use((req, _res, next) => {
+  setActiveDataDir(ROOT_DATA);
+  const secret = sessionSecret();
+  const user = secret ? readSession(req.headers.cookie, secret) : null;
+  if (user) {
+    try {
+      req.user = user;
+      req.userDir = userDir(__dirname, user.sub);
+      setActiveDataDir(req.userDir);
+    } catch (_) {
+      /* ignore bad sub */
+    }
+  }
+  next();
+});
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -189,9 +241,9 @@ function buildMailContent({
   };
 }
 
-function readMailLog() {
+function readMailLog(dir) {
   try {
-    const raw = fs.readFileSync(MAIL_LOG_PATH, "utf8");
+    const raw = fs.readFileSync(mailLogPath(dir), "utf8");
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (_) {
@@ -199,22 +251,28 @@ function readMailLog() {
   }
 }
 
-function writeMailLog(list) {
-  fs.mkdirSync(path.dirname(MAIL_LOG_PATH), { recursive: true });
-  fs.writeFileSync(MAIL_LOG_PATH, JSON.stringify(list, null, 2), "utf8");
+function writeMailLog(list, dir) {
+  const p = mailLogPath(dir);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(list, null, 2), "utf8");
 }
 
-function upsertMailLog(entry) {
-  const list = readMailLog();
+function upsertMailLog(entry, dir) {
+  const list = readMailLog(dir);
   const idx = list.findIndex((x) => x.id === entry.id);
   if (idx >= 0) list[idx] = { ...list[idx], ...entry };
   else list.unshift(entry);
-  writeMailLog(list.slice(0, 500));
+  writeMailLog(list.slice(0, 500), dir);
   return entry;
 }
 
 function findMailLog(id) {
-  return readMailLog().find((x) => x.id === id) || null;
+  const dirs = [ROOT_DATA, ...listUserIds(__dirname).map((sub) => userDir(__dirname, sub))];
+  for (const dir of dirs) {
+    const hit = readMailLog(dir).find((x) => x.id === id);
+    if (hit) return { entry: hit, dir };
+  }
+  return { entry: null, dir: ROOT_DATA };
 }
 
 function publicBase(req) {
@@ -223,6 +281,71 @@ function publicBase(req) {
   const host = req.get("x-forwarded-host") || req.get("host");
   return `${proto}://${host}`;
 }
+
+function googleRedirectUri(req) {
+  return `${publicBase(req)}/auth/google/callback`;
+}
+
+app.get("/auth/google", (req, res) => {
+  if (!isGoogleConfigured() || !sessionSecret()) {
+    return res
+      .status(503)
+      .send("구글 로그인이 아직 설정되지 않았습니다. GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET을 Render/로컬 환경변수에 넣으세요.");
+  }
+  const state = crypto.randomBytes(16).toString("hex");
+  res.append(
+    "Set-Cookie",
+    `wecan_oauth=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
+  );
+  res.redirect(googleAuthUrl(googleRedirectUri(req), state));
+});
+
+app.get("/auth/google/callback", async (req, res) => {
+  try {
+    const expected = getCookie(req.headers.cookie, "wecan_oauth");
+    if (!req.query.code || !req.query.state || req.query.state !== expected) {
+      throw new Error("로그인 확인 값이 맞지 않습니다. 다시 눌러 주세요.");
+    }
+    const result = await exchangeGoogleCode(googleRedirectUri(req), String(req.query.code));
+    if (!result.sub) throw new Error("구글 계정 정보를 읽지 못했습니다.");
+    const dir = migrateLegacyIfFirstUser(__dirname, result.sub);
+    saveGoogleTokens(
+      dir,
+      { ...result.tokens, email: result.email },
+      sessionSecret()
+    );
+    const token = signSession({ sub: result.sub, email: result.email }, sessionSecret());
+    const secure = req.secure || req.get("x-forwarded-proto") === "https";
+    res.append("Set-Cookie", sessionCookie(token, { secure }));
+    res.append("Set-Cookie", "wecan_oauth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+    res.redirect("/");
+  } catch (err) {
+    res.redirect("/?auth_error=" + encodeURIComponent(err.message || "로그인 실패"));
+  }
+});
+
+app.get("/auth/logout", (_req, res) => {
+  res.append("Set-Cookie", clearSessionCookie());
+  res.redirect("/");
+});
+
+app.get("/api/me", (req, res) => {
+  if (!req.user) {
+    return res.json({
+      ok: false,
+      loggedIn: false,
+      googleConfigured: isGoogleConfigured() && Boolean(sessionSecret()),
+    });
+  }
+  const tokens = loadGoogleTokens(req.userDir, sessionSecret());
+  res.json({
+    ok: true,
+    loggedIn: true,
+    email: req.user.email,
+    googleConfigured: true,
+    gmailReady: Boolean(tokens && tokens.refresh_token),
+  });
+});
 
 async function sendViaGas(mail) {
   const url = String(process.env.GAS_MAIL_URL || "").trim();
@@ -358,14 +481,20 @@ async function sendViaSmtp(mail) {
   });
 }
 
-async function sendDeliveryEmail(opts) {
+async function sendDeliveryEmail(opts, req) {
+  const mail = buildMailContent(opts);
+  const tokens =
+    req && req.userDir ? loadGoogleTokens(req.userDir, sessionSecret()) : null;
+  if (tokens && tokens.refresh_token && req.user && req.user.email) {
+    mail.fromEmail = req.user.email;
+    return sendViaGmailApi(tokens, mail, googleRedirectUri(req));
+  }
   if (!isEmailReady()) {
     throw new Error(
-      "이메일 설정이 없습니다. RESEND_API_KEY / BREVO_API_KEY / SENDGRID_API_KEY 또는 SMTP를 설정하세요."
+      "구글 로그인이 필요합니다. 로그인하면 그 지메일로 발송됩니다."
     );
   }
-  const mail = buildMailContent(opts);
-  if (!process.env.GAS_MAIL_URL && !mail.fromEmail) {
+  if (!mail.fromEmail) {
     throw new Error(
       "MAIL_FROM에 서비스 발신 메일을 넣으세요. 회신은 설정의 공급자 메일입니다."
     );
@@ -377,38 +506,44 @@ async function sendDeliveryEmail(opts) {
   return sendViaSmtp(mail);
 }
 
-app.get("/api/meta", (_req, res) => {
+app.get("/api/meta", (req, res) => {
+  const loggedIn = Boolean(req.user);
+  const tokens =
+    loggedIn && req.userDir ? loadGoogleTokens(req.userDir, sessionSecret()) : null;
+  const gmailReady = Boolean(tokens && tokens.refresh_token);
+  const supplier = loggedIn ? getSupplier() : { email: "" };
+  const env = mailEnvelope(supplier, process.env);
   res.json({
     version: APP_VERSION,
     clientDefault: DEFAULT_CLIENT,
     dateDefault: todayISO(),
-    supplierEmail: getSupplier().email || "",
-    mailFromName: mailEnvelope(getSupplier(), process.env).fromName,
-    mailFromAddress:
-      mailEnvelope(getSupplier(), process.env).fromEmail ||
-      process.env.SMTP_USER ||
-      "",
-    mailReplyTo: mailEnvelope(getSupplier(), process.env).replyTo,
-    supplierComplete: isComplete(getSupplier()),
-    packages: readPresets().presets.map((p) => ({
-      id: p.id,
-      title: p.title,
-      items: [
-        {
-          name: p.name,
-          spec: p.spec || "",
-          unit: p.unit || "식",
-          qty: Number(p.qty) || 1,
-          unitPriceIncl: Number(p.unitPriceIncl) || 0,
-        },
-      ],
-    })),
-    emailConfigured: isEmailReady(),
-    emailProvider: emailProviderName(),
+    loggedIn,
+    googleConfigured: isGoogleConfigured() && Boolean(sessionSecret()),
+    userEmail: loggedIn ? req.user.email : "",
+    supplierEmail: supplier.email || "",
+    mailFromName: env.fromName,
+    mailFromAddress: gmailReady && req.user ? req.user.email : env.fromEmail,
+    mailReplyTo: env.replyTo,
+    supplierComplete: loggedIn ? isComplete(supplier) : false,
+    packages: loggedIn
+      ? readPresets(req.userDir).presets.map((p) => ({
+          id: p.id,
+          title: p.title,
+          items: [
+            {
+              name: p.name,
+              spec: p.spec || "",
+              unit: p.unit || "식",
+              qty: Number(p.qty) || 1,
+              unitPriceIncl: Number(p.unitPriceIncl) || 0,
+            },
+          ],
+        }))
+      : [],
+    emailConfigured: gmailReady || isEmailReady(),
+    emailProvider: gmailReady ? "gmail" : emailProviderName(),
   });
 });
-
-const PRESETS_PATH = path.join(__dirname, "data", "presets.json");
 
 function defaultPresetsFromPackages() {
   return PACKAGE_TEMPLATES.map((t) => {
@@ -429,9 +564,9 @@ function defaultPresetsFromPackages() {
   });
 }
 
-function readPresets() {
+function readPresets(dir) {
   try {
-    const raw = fs.readFileSync(PRESETS_PATH, "utf8");
+    const raw = fs.readFileSync(presetsPath(dir), "utf8");
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length) {
       return { updatedAt: null, presets: parsed };
@@ -448,35 +583,25 @@ function readPresets() {
   return { updatedAt: null, presets: defaultPresetsFromPackages() };
 }
 
-function writePresets(list) {
-  fs.mkdirSync(path.dirname(PRESETS_PATH), { recursive: true });
+function writePresets(list, dir) {
+  const p = presetsPath(dir);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
   const payload = {
     updatedAt: new Date().toISOString(),
     presets: list,
   };
-  fs.writeFileSync(PRESETS_PATH, JSON.stringify(payload, null, 2), "utf8");
+  fs.writeFileSync(p, JSON.stringify(payload, null, 2), "utf8");
   return payload;
 }
 
-app.post("/api/auth", (req, res) => {
-  const { pin } = req.body || {};
-  if (String(pin || "") !== String(FORM_PIN)) {
-    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-  }
-  res.json({ ok: true });
-});
-
-app.get("/api/presets", (_req, res) => {
-  const data = readPresets();
+app.get("/api/presets", requireUser, (req, res) => {
+  const data = readPresets(req.userDir);
   res.json({ ok: true, updatedAt: data.updatedAt, presets: data.presets });
 });
 
-app.put("/api/presets", (req, res) => {
+app.put("/api/presets", requireUser, (req, res) => {
   try {
-    const { pin, presets } = req.body || {};
-    if (String(pin || "") !== String(FORM_PIN)) {
-      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-    }
+    const { presets } = req.body || {};
     if (!Array.isArray(presets)) {
       return res.status(400).json({ ok: false, error: "presets 배열이 필요합니다." });
     }
@@ -491,7 +616,7 @@ app.put("/api/presets", (req, res) => {
         unitPriceIncl: Number(p.unitPriceIncl) || 0,
       }))
       .filter((p) => p.title && p.name);
-    const saved = writePresets(cleaned);
+    const saved = writePresets(cleaned, req.userDir);
     res.json({ ok: true, updatedAt: saved.updatedAt, presets: cleaned });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "저장 실패" });
@@ -500,16 +625,13 @@ app.put("/api/presets", (req, res) => {
 
 const { mimeFromBuffer } = require("./sign-mark");
 
-app.get("/api/supplier-file", (req, res) => {
-  if (!pinOk(req.query.pin)) {
-    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-  }
+app.get("/api/supplier-file", requireUser, (req, res) => {
   const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
   const file = names[req.query.kind];
   if (!file) {
     return res.status(400).json({ ok: false, error: "kind는 seal, biz, bank 중 하나여야 합니다." });
   }
-  const dest = path.join(__dirname, "data", file);
+  const dest = path.join(req.userDir, file);
   if (!fs.existsSync(dest)) {
     return res.status(404).json({ ok: false, error: "파일이 없습니다." });
   }
@@ -518,12 +640,7 @@ app.get("/api/supplier-file", (req, res) => {
   res.type(mimeFromBuffer(buf)).send(buf);
 });
 
-function pinOk(pin) {
-  return String(pin || "") === String(FORM_PIN);
-}
-
-function supplierFiles() {
-  const dir = path.join(__dirname, "data");
+function supplierFiles(dir) {
   return {
     seal: fs.existsSync(path.join(dir, "seal.png")),
     biz: fs.existsSync(path.join(dir, "biz_reg.png")),
@@ -531,27 +648,21 @@ function supplierFiles() {
   };
 }
 
-app.get("/api/supplier", (req, res) => {
-  if (!pinOk(req.query.pin)) {
-    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-  }
+app.get("/api/supplier", requireUser, (req, res) => {
   const supplier = getSupplier();
   res.json({
     ok: true,
     supplier,
     complete: isComplete(supplier),
     missing: missingFields(supplier),
-    files: supplierFiles(),
+    files: supplierFiles(req.userDir),
   });
 });
 
-app.put("/api/supplier", (req, res) => {
+app.put("/api/supplier", requireUser, (req, res) => {
   try {
-    const { pin, supplier } = req.body || {};
-    if (!pinOk(pin)) {
-      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-    }
-    const saved = saveSupplier(__dirname, supplier);
+    const { supplier } = req.body || {};
+    const saved = saveSupplierToDataDir(req.userDir, supplier);
     res.json({
       ok: true,
       supplier: saved,
@@ -563,12 +674,9 @@ app.put("/api/supplier", (req, res) => {
   }
 });
 
-app.put("/api/supplier-file", (req, res) => {
+app.put("/api/supplier-file", requireUser, (req, res) => {
   try {
-    const { pin, kind, image } = req.body || {};
-    if (!pinOk(pin)) {
-      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-    }
+    const { kind, image } = req.body || {};
     const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
     const file = names[kind];
     if (!file) {
@@ -582,40 +690,36 @@ app.put("/api/supplier-file", (req, res) => {
     if (buf.length < 200 || buf.length > 6_000_000) {
       return res.status(400).json({ ok: false, error: "이미지 크기가 올바르지 않습니다." });
     }
-    const dest = path.join(__dirname, "data", file);
+    const dest = path.join(req.userDir, file);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, buf);
     if (kind !== "seal") resetBizBankCache();
-    res.json({ ok: true, files: supplierFiles() });
+    res.json({ ok: true, files: supplierFiles(req.userDir) });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "파일 저장 실패" });
   }
 });
 
-app.delete("/api/supplier-file", (req, res) => {
+app.delete("/api/supplier-file", requireUser, (req, res) => {
   try {
-    const { pin, kind } = req.body || {};
-    if (!pinOk(pin)) {
-      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-    }
+    const { kind } = req.body || {};
     const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
     const file = names[kind];
     if (!file) {
       return res.status(400).json({ ok: false, error: "kind는 seal, biz, bank 중 하나여야 합니다." });
     }
-    const dest = path.join(__dirname, "data", file);
+    const dest = path.join(req.userDir, file);
     if (fs.existsSync(dest)) fs.unlinkSync(dest);
     if (kind !== "seal") resetBizBankCache();
-    res.json({ ok: true, files: supplierFiles() });
+    res.json({ ok: true, files: supplierFiles(req.userDir) });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "삭제 실패" });
   }
 });
 
-app.post("/api/generate", async (req, res) => {
+app.post("/api/generate", requireUser, async (req, res) => {
   try {
     const {
-      pin,
       packageIds,
       customItems,
       title,
@@ -631,10 +735,6 @@ app.post("/api/generate", async (req, res) => {
       subject,
       sendEmail,
     } = req.body || {};
-
-    if (String(pin || "") !== String(FORM_PIN)) {
-      return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-    }
 
     const hasCustom = Array.isArray(customItems) && customItems.length > 0;
     const hasPackages = Array.isArray(packageIds) && packageIds.length > 0;
@@ -681,35 +781,41 @@ app.post("/api/generate", async (req, res) => {
         receiptUrl = `${publicBase(req)}/r/${receiptId}`;
         const mailSubject =
           subject || `[${getSupplier().name || "납품서류"}] ${titles} 납품서류 (${fmt(totalSum)}원)`;
-        await sendDeliveryEmail({
-          client: client || DEFAULT_CLIENT,
-          date: date || todayISO(),
-          titles,
-          totalSum,
-          subject,
-          fileName,
-          filePath: result.outPath,
-          emailTo,
-          emailCc,
-          receiptUrl,
-        });
-        emailed = true;
-        try {
-          upsertMailLog({
-            id: receiptId,
-            to: emailTo,
-            cc: emailCc || "",
-            subject: mailSubject,
+        await sendDeliveryEmail(
+          {
+            client: client || DEFAULT_CLIENT,
+            date: date || todayISO(),
             titles,
             totalSum,
+            subject,
             fileName,
-            client: client || DEFAULT_CLIENT,
-            sentAt: new Date().toISOString(),
-            status: "sent",
-            downloadedAt: null,
-            downloadCount: 0,
+            filePath: result.outPath,
+            emailTo,
+            emailCc,
             receiptUrl,
-          });
+          },
+          req
+        );
+        emailed = true;
+        try {
+          upsertMailLog(
+            {
+              id: receiptId,
+              to: emailTo,
+              cc: emailCc || "",
+              subject: mailSubject,
+              titles,
+              totalSum,
+              fileName,
+              client: client || DEFAULT_CLIENT,
+              sentAt: new Date().toISOString(),
+              status: "sent",
+              downloadedAt: null,
+              downloadCount: 0,
+              receiptUrl,
+            },
+            req.userDir
+          );
         } catch (logErr) {
           console.error("mail log write failed", logErr);
         }
@@ -754,17 +860,21 @@ app.get("/r/:id", (req, res) => {
     if (!fs.existsSync(filePath)) {
       return res.status(404).send("서류를 찾을 수 없습니다. 링크가 만료되었을 수 있습니다.");
     }
-    const entry = findMailLog(id);
+    const found = findMailLog(id);
+    const entry = found.entry;
     const now = new Date().toISOString();
-    upsertMailLog({
-      ...(entry || { id, fileName: `${id}.pdf`, to: "", subject: "" }),
-      id,
-      downloadedAt: (entry && entry.downloadedAt) || now,
-      downloadCount: Number((entry && entry.downloadCount) || 0) + 1,
-      lastDownloadAt: now,
-      status: "received",
-      receiptConfirmed: true,
-    });
+    upsertMailLog(
+      {
+        ...(entry || { id, fileName: `${id}.pdf`, to: "", subject: "" }),
+        id,
+        downloadedAt: (entry && entry.downloadedAt) || now,
+        downloadCount: Number((entry && entry.downloadCount) || 0) + 1,
+        lastDownloadAt: now,
+        status: "received",
+        receiptConfirmed: true,
+      },
+      found.dir
+    );
     const name = (entry && entry.fileName) || `납품서류_${id}.pdf`;
     res.download(filePath, name);
   } catch (err) {
@@ -773,24 +883,16 @@ app.get("/r/:id", (req, res) => {
   }
 });
 
-app.get("/api/mail-log", (req, res) => {
-  const pin = req.query.pin || req.headers["x-form-pin"];
-  if (String(pin || "") !== String(FORM_PIN)) {
-    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-  }
-  res.json({ ok: true, items: summarizeMailLog() });
+app.get("/api/mail-log", requireUser, (req, res) => {
+  res.json({ ok: true, items: summarizeMailLog(req.userDir) });
 });
 
-app.post("/api/mail-log", (req, res) => {
-  const { pin } = req.body || {};
-  if (String(pin || "") !== String(FORM_PIN)) {
-    return res.status(401).json({ ok: false, error: "접속 비밀번호가 올바르지 않습니다." });
-  }
-  res.json({ ok: true, items: summarizeMailLog() });
+app.post("/api/mail-log", requireUser, (req, res) => {
+  res.json({ ok: true, items: summarizeMailLog(req.userDir) });
 });
 
-function summarizeMailLog() {
-  return readMailLog().map((e) => ({
+function summarizeMailLog(dir) {
+  return readMailLog(dir).map((e) => ({
     id: e.id,
     to: e.to,
     cc: e.cc || "",
@@ -811,10 +913,6 @@ function summarizeMailLog() {
 
 fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
-// ensure mail log file exists
-if (!fs.existsSync(MAIL_LOG_PATH)) {
-  writeMailLog([]);
-}
 
 app.use((err, _req, res, _next) => {
   console.error(err);
@@ -828,7 +926,7 @@ app.listen(PORT, "0.0.0.0", () => {
   for (const ip of lanAddresses()) {
     console.log(`  폰:   http://${ip}:${PORT}`);
   }
-  console.log(`  PIN:  ${FORM_PIN}`);
+  console.log(`  GOOGLE: ${isGoogleConfigured() && sessionSecret() ? "on" : "off"}`);
   console.log(`  EMAIL: ${emailProviderName()}`);
   if (process.env.PUBLIC_URL) {
     console.log(`  공개: ${process.env.PUBLIC_URL}`);

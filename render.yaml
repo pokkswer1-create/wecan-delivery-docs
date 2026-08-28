@@ -5,17 +5,11 @@ services:
     plan: free
     healthCheckPath: /api/meta
     envVars:
-      - key: FORM_PIN
+      - key: GOOGLE_CLIENT_ID
         sync: false
-      - key: SMTP_HOST
-        value: smtp.naver.com
-      - key: SMTP_PORT
-        value: "465"
-      - key: SMTP_SECURE
-        value: "true"
-      - key: SMTP_USER
+      - key: GOOGLE_CLIENT_SECRET
         sync: false
-      - key: SMTP_PASS
+      - key: SESSION_SECRET
         sync: false
-      - key: SMTP_FROM
-        sync: false
+      - key: PUBLIC_URL
+        value: https://wecan-docs.onrender.com

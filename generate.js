@@ -3,19 +3,25 @@ const path = require("path");
 const { PDFDocument } = require("pdf-lib");
 const { htmlToPdf, htmlToPdfMany, assetDataUri } = require("./pdf");
 const {
-  loadSupplier,
+  loadSupplierFromDataDir,
   isComplete,
   missingFields,
   docFilePrefix,
 } = require("./supplier");
-const { loadSealDataUri, signHtml: signMarkHtml } = require("./sign-mark");
+const { loadSealFromDataDir, signHtml: signMarkHtml } = require("./sign-mark");
+const crypto = require("crypto");
 
 const ROOT = __dirname;
 const OUT = path.join(ROOT, "out");
 const TMP = path.join(ROOT, "tmp");
+let activeDataDir = path.join(ROOT, "data");
+
+function setActiveDataDir(dir) {
+  activeDataDir = dir || path.join(ROOT, "data");
+}
 
 function getSupplier() {
-  return loadSupplier(ROOT);
+  return loadSupplierFromDataDir(activeDataDir);
 }
 
 const DEFAULT_CLIENT = "";
@@ -450,7 +456,7 @@ function signHtml() {
     signMarkHtml({
       name: s.name,
       ceo: s.ceo,
-      sealDataUri: loadSealDataUri(ROOT),
+      sealDataUri: loadSealFromDataDir(activeDataDir),
     }) +
     `
   <div class="footer-bank">
@@ -565,7 +571,7 @@ ${fontHead()}
 }
 
 function resolveDataOrAsset(imageFile) {
-  const custom = path.join(ROOT, "data", imageFile);
+  const custom = path.join(activeDataDir, imageFile);
   if (fs.existsSync(custom)) {
     const buf = fs.readFileSync(custom);
     const ext = path.extname(imageFile).toLowerCase();
@@ -599,6 +605,7 @@ ${fontHead()}
 
 function resetBizBankCache() {
   bizBankCachePaths = null;
+  bizBankCacheKey = "";
   try {
     fs.rmSync(path.join(TMP, "_bizbank_cache"), { recursive: true, force: true });
   } catch (_) {
@@ -618,13 +625,20 @@ async function mergePdfs(paths, outPath) {
 }
 
 let bizBankCachePaths = null;
+let bizBankCacheKey = "";
+
+function dataCacheKey() {
+  return crypto.createHash("sha1").update(activeDataDir).digest("hex").slice(0, 12);
+}
 
 async function writeBizBankPdfs(dir) {
-  const cacheDir = path.join(TMP, "_bizbank_cache");
+  const key = dataCacheKey();
+  const cacheDir = path.join(TMP, "_bizbank_cache", key);
   const bizPdfCached = path.join(cacheDir, "04_biz.pdf");
   const bankPdfCached = path.join(cacheDir, "05_bank.pdf");
 
   if (
+    bizBankCacheKey === key &&
     bizBankCachePaths &&
     fs.existsSync(bizBankCachePaths[0]) &&
     fs.existsSync(bizBankCachePaths[1])
@@ -632,6 +646,7 @@ async function writeBizBankPdfs(dir) {
     return bizBankCachePaths;
   }
   if (fs.existsSync(bizPdfCached) && fs.existsSync(bankPdfCached)) {
+    bizBankCacheKey = key;
     bizBankCachePaths = [bizPdfCached, bankPdfCached];
     return bizBankCachePaths;
   }
@@ -656,6 +671,7 @@ async function writeBizBankPdfs(dir) {
     ],
     2
   );
+  bizBankCacheKey = key;
   bizBankCachePaths = [bizPdfCached, bankPdfCached];
   return bizBankCachePaths;
 }
@@ -878,6 +894,7 @@ async function main() {
 
 module.exports = {
   getSupplier,
+  setActiveDataDir,
   resetBizBankCache,
   DEFAULT_CLIENT,
   PACKAGE_TEMPLATES,

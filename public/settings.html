@@ -169,6 +169,27 @@
       margin-bottom: 10px;
     }
     .hidden { display: none !important; }
+    a.google-btn {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      background: #fff;
+      color: #1a222c;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .user-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .user-bar a { color: var(--accent-2); font-weight: 700; text-decoration: none; }
     .file-row {
       display: flex;
       align-items: center;
@@ -221,16 +242,15 @@
       <p>PDF·메일에 찍히는 회사 정보입니다. 코드가 아니라 여기서 바꿉니다.</p>
     </header>
 
-    <div class="card">
-      <h2>접속</h2>
-      <label for="pin">비밀번호</label>
-      <input id="pin" type="password" autocomplete="current-password" />
-      <button class="ghost" type="button" id="unlockBtn" style="margin-top:0">비밀번호 확인</button>
-      <div class="status" id="unlockStatus"></div>
+    <div class="card" id="loginCard">
+      <h2>구글 로그인</h2>
+      <p class="hint" style="margin:0 0 12px">로그인해야 회사 정보를 보고 고칠 수 있습니다.</p>
+      <a class="google-btn" href="/auth/google">Google로 로그인</a>
+      <div class="status" id="authError"></div>
     </div>
-
-    <div id="lockedNote" class="card">
-      <p class="hint" style="margin:0">비밀번호를 확인하면 상호·계좌·도장/사인을 고칠 수 있습니다.</p>
+    <div class="user-bar hidden" id="userBar">
+      <span id="userEmail"></span>
+      <a href="/auth/logout">로그아웃</a>
     </div>
 
     <form id="form" class="hidden">
@@ -251,7 +271,7 @@
         <input id="phone" type="tel" />
         <label for="email">메일 (거래처 회신용)</label>
         <input id="email" type="email" />
-        <p class="hint">거래처가 답장하면 여기로 옵니다. 보낸 사람 주소는 서비스 메일입니다.</p>
+        <p class="hint">거래처가 답장하면 여기로 옵니다. 보낸 사람 주소는 로그인한 지메일입니다.</p>
       </div>
 
       <div class="card">
@@ -320,11 +340,11 @@
     };
 
     const els = {
-      pin: document.getElementById("pin"),
-      unlockBtn: document.getElementById("unlockBtn"),
-      unlockStatus: document.getElementById("unlockStatus"),
+      loginCard: document.getElementById("loginCard"),
+      userBar: document.getElementById("userBar"),
+      userEmail: document.getElementById("userEmail"),
+      authError: document.getElementById("authError"),
       form: document.getElementById("form"),
-      lockedNote: document.getElementById("lockedNote"),
       completeHint: document.getElementById("completeHint"),
       saveBtn: document.getElementById("saveBtn"),
       saveStatus: document.getElementById("saveStatus"),
@@ -380,10 +400,7 @@
       if (!els.sealPreview) return;
       if (on) {
         els.sealPreview.src =
-          "/api/supplier-file?kind=seal&pin=" +
-          encodeURIComponent(els.pin.value) +
-          "&t=" +
-          Date.now();
+          "/api/supplier-file?kind=seal&t=" + Date.now();
         els.sealPreview.classList.remove("hidden");
       } else {
         els.sealPreview.removeAttribute("src");
@@ -406,37 +423,42 @@
     }
 
     async function loadSupplier() {
-      const pin = els.pin.value;
-      const res = await fetch("/api/supplier?pin=" + encodeURIComponent(pin));
+      const res = await fetch("/api/supplier");
       const data = await readJson(res);
       if (!data.ok) throw new Error(data.error || "불러오기 실패");
       fillForm(data.supplier || {});
       setCompleteHint(data.complete, data.missing);
       setFileStatus(data.files);
       els.form.classList.remove("hidden");
-      els.lockedNote.classList.add("hidden");
     }
 
-    async function unlock() {
-      if (!els.pin.value) {
-        show(els.unlockStatus, "err", "비밀번호를 입력하세요.");
+    async function init() {
+      const q = new URLSearchParams(location.search);
+      const authErr = q.get("auth_error") || "";
+      if (authErr) {
+        els.authError.className = "status show err";
+        els.authError.textContent = authErr;
+      }
+      const me = await fetch("/api/me").then((r) => readJson(r));
+      if (!me.loggedIn) {
+        if (!me.googleConfigured && !authErr) {
+          els.authError.className = "status show err";
+          els.authError.textContent =
+            "구글 로그인이 아직 설정되지 않았습니다. GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET을 넣으세요.";
+        }
         return;
       }
+      els.loginCard.classList.add("hidden");
+      els.userBar.classList.remove("hidden");
+      els.userEmail.textContent = me.email || "";
       try {
         await loadSupplier();
-        show(els.unlockStatus, "ok", "확인됨. 아래를 고치고 저장하세요.");
       } catch (err) {
-        show(els.unlockStatus, "err", err.message);
+        show(els.authError, "err", err.message);
       }
     }
 
-    els.unlockBtn.addEventListener("click", unlock);
-    els.pin.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        unlock();
-      }
-    });
+    init().catch((err) => show(els.authError, "err", err.message));
 
     els.form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -445,7 +467,7 @@
         const res = await fetch("/api/supplier", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin: els.pin.value, supplier: readForm() }),
+          body: JSON.stringify({ supplier: readForm() }),
         });
         const data = await readJson(res);
         if (!data.ok) throw new Error(data.error || "저장 실패");
@@ -479,7 +501,7 @@
           const res = await fetch("/api/supplier-file", {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pin: els.pin.value, kind }),
+            body: JSON.stringify({ kind }),
           });
           const data = await readJson(res);
           if (!data.ok) throw new Error(data.error || "삭제 실패");
@@ -501,7 +523,7 @@
           const res = await fetch("/api/supplier-file", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pin: els.pin.value, kind, image }),
+            body: JSON.stringify({ kind, image }),
           });
           const data = await readJson(res);
           if (!data.ok) throw new Error(data.error || "올리기 실패");

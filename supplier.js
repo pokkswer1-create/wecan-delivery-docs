@@ -45,22 +45,28 @@ function supplierPath(rootDir) {
   return path.join(rootDir, "data", "supplier.json");
 }
 
-function loadSupplier(rootDir) {
-  const p = supplierPath(rootDir);
+function loadSupplierFromDataDir(dataDir) {
   try {
-    const raw = JSON.parse(fs.readFileSync(p, "utf8"));
+    const raw = JSON.parse(fs.readFileSync(path.join(dataDir, "supplier.json"), "utf8"));
     return normalizeSupplier(raw);
   } catch (_) {
     return emptySupplier();
   }
 }
 
-function saveSupplier(rootDir, data) {
-  const dir = path.join(rootDir, "data");
-  fs.mkdirSync(dir, { recursive: true });
+function saveSupplierToDataDir(dataDir, data) {
+  fs.mkdirSync(dataDir, { recursive: true });
   const normalized = normalizeSupplier(data);
-  fs.writeFileSync(supplierPath(rootDir), JSON.stringify(normalized, null, 2), "utf8");
+  fs.writeFileSync(path.join(dataDir, "supplier.json"), JSON.stringify(normalized, null, 2), "utf8");
   return normalized;
+}
+
+function loadSupplier(rootDir) {
+  return loadSupplierFromDataDir(path.join(rootDir, "data"));
+}
+
+function saveSupplier(rootDir, data) {
+  return saveSupplierToDataDir(path.join(rootDir, "data"), data);
 }
 
 function docFilePrefix(supplier) {
@@ -77,7 +83,9 @@ module.exports = {
   isComplete,
   missingFields,
   loadSupplier,
+  loadSupplierFromDataDir,
   saveSupplier,
+  saveSupplierToDataDir,
   docFilePrefix,
   supplierPath,
 };

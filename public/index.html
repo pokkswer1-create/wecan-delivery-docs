@@ -242,6 +242,27 @@
       margin-bottom: 10px;
     }
     .hidden { display: none !important; }
+    a.google-btn {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      background: #fff;
+      color: #1a222c;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .user-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .user-bar a { color: var(--accent-2); font-weight: 700; text-decoration: none; }
     .price-tag {
       color: var(--accent-2);
       font-size: 11px;
@@ -263,15 +284,17 @@
       <p class="hint hidden" id="supplierWarn" style="margin-top:10px"><a href="/settings.html" style="color:var(--accent-2)">설정</a>에서 회사 정보를 먼저 넣어야 서류가 만들어집니다.</p>
     </header>
 
-    <form id="form">
-      <div class="card">
-        <h2>접속</h2>
-        <label for="pin">비밀번호</label>
-        <input id="pin" type="password" autocomplete="current-password" required />
-        <button class="ghost" type="button" id="unlockBtn" style="margin-top:0">비밀번호 확인 · 품목 불러오기</button>
-        <div class="status" id="unlockStatus"></div>
-      </div>
-
+    <div class="card" id="loginCard">
+      <h2>구글 로그인</h2>
+      <p class="hint">로그인하면 그 지메일로 서류를 보냅니다. 품목·설정은 계정마다 따로입니다.</p>
+      <a class="google-btn" href="/auth/google">Google로 로그인</a>
+      <div class="status" id="authError"></div>
+    </div>
+    <div class="user-bar hidden" id="userBar">
+      <span id="userEmail"></span>
+      <a href="/auth/logout">로그아웃</a>
+    </div>
+    <form id="form" class="hidden">
       <div class="card">
         <h2>문서 제목</h2>
         <input id="docTitle" type="text" placeholder="예: 지주대 임대 / 심판대 납품" value="납품" />
@@ -281,7 +304,7 @@
 
       <div class="card" id="navCard">
         <h2>품목 네비게이션</h2>
-        <p class="hint" id="navLockHint">위 비밀번호를 확인하면 저장된 품목 메뉴가 나타납니다.</p>
+        <p class="hint" id="navLockHint">로그인하면 저장된 품목 메뉴가 나타납니다.</p>
         <div id="navUnlocked" class="hidden">
           <p class="hint">아래 버튼 = 메뉴입니다. 등록/수정/삭제 후 <strong>메뉴 저장</strong>을 누르면 이 폰에 계속 남습니다.</p>
           <div class="presets" id="presets"></div>
@@ -340,8 +363,11 @@
   <script>
     const STORAGE_KEY = "wecan_presets_v2";
     const STORAGE_META = "wecan_presets_meta_v2";
-    const UNLOCK_KEY = "wecan_unlocked_v1";
     const els = {
+      loginCard: document.getElementById("loginCard"),
+      userBar: document.getElementById("userBar"),
+      userEmail: document.getElementById("userEmail"),
+      authError: document.getElementById("authError"),
       presets: document.getElementById("presets"),
       catalog: document.getElementById("catalog"),
       manageBox: document.getElementById("manageBox"),
@@ -349,8 +375,6 @@
       addCatalog: document.getElementById("addCatalog"),
       saveCatalog: document.getElementById("saveCatalog"),
       catalogStatus: document.getElementById("catalogStatus"),
-      unlockBtn: document.getElementById("unlockBtn"),
-      unlockStatus: document.getElementById("unlockStatus"),
       navLockHint: document.getElementById("navLockHint"),
       navUnlocked: document.getElementById("navUnlocked"),
       items: document.getElementById("items"),
@@ -360,7 +384,6 @@
       sumText: document.getElementById("sumText"),
       client: document.getElementById("client"),
       date: document.getElementById("date"),
-      pin: document.getElementById("pin"),
       sendEmail: document.getElementById("sendEmail"),
       emailTo: document.getElementById("emailTo"),
       emailCc: document.getElementById("emailCc"),
@@ -594,12 +617,6 @@
     function setNavUnlocked(on) {
       els.navUnlocked.classList.toggle("hidden", !on);
       els.navLockHint.classList.toggle("hidden", on);
-      if (on) localStorage.setItem(UNLOCK_KEY, "1");
-    }
-
-    function showUnlockStatus(type, text) {
-      els.unlockStatus.className = "status show " + type;
-      els.unlockStatus.textContent = text;
     }
 
     async function loadCatalog() {
@@ -653,54 +670,45 @@
       renderCatalogEditor();
     }
 
-    async function unlockAndLoad() {
-      if (!els.pin.value) {
-        showUnlockStatus("err", "비밀번호를 입력하세요.");
+    async function init() {
+      const q = new URLSearchParams(location.search);
+      const authErr = q.get("auth_error") || "";
+      if (authErr) {
+        els.authError.className = "status show err";
+        els.authError.textContent = authErr;
+      }
+      const me = await fetch("/api/me").then((r) => readJson(r));
+      if (!me.loggedIn) {
+        els.loginCard.classList.remove("hidden");
+        els.userBar.classList.add("hidden");
+        els.form.classList.add("hidden");
+        if (!me.googleConfigured && !authErr) {
+          els.authError.className = "status show err";
+          els.authError.textContent =
+            "구글 로그인이 아직 설정되지 않았습니다. GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET을 넣으세요.";
+        }
         return;
       }
-      try {
-        const res = await fetch("/api/auth", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin: els.pin.value }),
-        });
-        const data = await readJson(res);
-        if (!data.ok) throw new Error(data.error || "비밀번호가 올바르지 않습니다.");
-        setNavUnlocked(true);
-        await loadCatalog();
-        showUnlockStatus("ok", "확인됨 · 저장된 품목 메뉴를 불러왔습니다.");
-      } catch (err) {
-        showUnlockStatus("err", err.message);
-      }
-    }
+      els.loginCard.classList.add("hidden");
+      els.userBar.classList.remove("hidden");
+      els.form.classList.remove("hidden");
+      els.userEmail.textContent = me.email || "";
 
-    async function init() {
       const meta = await fetch("/api/meta").then((r) => readJson(r));
       els.client.value = meta.clientDefault || "";
       els.date.value = todayLocal();
       els.emailHint.textContent = meta.emailConfigured
-        ? `발송 가능 (${meta.emailProvider || "설정됨"}). 보낸사람 ${meta.mailFromName || "설정 상호"} · 회신 ${meta.mailReplyTo || "설정 메일"}`
-        : "이메일 미설정";
+        ? `보낸 사람 ${meta.mailFromName || "상호"} <${meta.mailFromAddress || me.email}> · 회신 ${meta.mailReplyTo || "설정 메일"}`
+        : "구글 메일 권한이 없습니다. 다시 로그인해 주세요.";
       if (meta.supplierComplete === false && els.supplierWarn) {
         els.supplierWarn.classList.remove("hidden");
       }
       rows = [blankRow()];
       renderRows();
       els.emailTo.required = els.sendEmail.checked;
-      // 이전에 잠금 해제한 적 있어도, 비밀번호 다시 확인 후 품목 표시
-      setNavUnlocked(false);
-      if (localStorage.getItem(UNLOCK_KEY) === "1" && els.pin.value) {
-        await unlockAndLoad();
-      }
+      setNavUnlocked(true);
+      await loadCatalog();
     }
-
-    els.unlockBtn.addEventListener("click", () => unlockAndLoad());
-    els.pin.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        unlockAndLoad();
-      }
-    });
 
     els.toggleManage.addEventListener("click", () => {
       els.manageBox.classList.toggle("hidden");
@@ -722,10 +730,6 @@
         showCatalogStatus("err", "메뉴를 1개 이상 등록하세요.");
         return;
       }
-      if (!els.pin.value) {
-        showCatalogStatus("err", "위에 접속 비밀번호를 먼저 입력하세요.");
-        return;
-      }
       cleaned.forEach((p) => {
         if (!p.title) p.title = p.name;
         if (!p.name) p.name = p.title;
@@ -739,7 +743,7 @@
         const res = await fetch("/api/presets", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin: els.pin.value, presets: catalog }),
+          body: JSON.stringify({ presets: catalog }),
         });
         const data = await readJson(res);
         if (!data.ok) throw new Error(data.error || "저장 실패");
@@ -778,7 +782,6 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            pin: els.pin.value,
             title: els.docTitle.value.trim() || "납품",
             note: els.note.value.trim(),
             customItems,

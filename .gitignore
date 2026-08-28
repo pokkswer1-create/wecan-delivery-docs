@@ -7,6 +7,7 @@ data/biz_reg.png
 data/bank.png
 data/mail-log.json
 data/receipts/
+data/users/
 _smtp_pass.txt
 _gmail_pass.txt
 _fix_smtp.js

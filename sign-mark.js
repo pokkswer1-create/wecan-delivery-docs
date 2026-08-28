@@ -5,6 +5,14 @@ function sealPath(rootDir) {
   return path.join(rootDir, "data", "seal.png");
 }
 
+function loadSealFromDataDir(dataDir) {
+  const p = path.join(dataDir, "seal.png");
+  if (!fs.existsSync(p)) return "";
+  const buf = fs.readFileSync(p);
+  if (buf.length < 8) return "";
+  return `data:${mimeFromBuffer(buf)};base64,${buf.toString("base64")}`;
+}
+
 function mimeFromBuffer(buf) {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
     return "image/jpeg";
@@ -26,11 +34,7 @@ function mimeFromBuffer(buf) {
 }
 
 function loadSealDataUri(rootDir) {
-  const p = sealPath(rootDir);
-  if (!fs.existsSync(p)) return "";
-  const buf = fs.readFileSync(p);
-  if (buf.length < 8) return "";
-  return `data:${mimeFromBuffer(buf)};base64,${buf.toString("base64")}`;
+  return loadSealFromDataDir(path.join(rootDir, "data"));
 }
 
 function signHtml({ name, ceo, sealDataUri }) {
@@ -51,5 +55,6 @@ module.exports = {
   sealPath,
   mimeFromBuffer,
   loadSealDataUri,
+  loadSealFromDataDir,
   signHtml,
 };
