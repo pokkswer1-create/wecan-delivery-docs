@@ -186,6 +186,8 @@ function createTransport() {
 function buildMailContent({
   client,
   date,
+  quoteDate,
+  deliveryDate,
   titles,
   totalSum,
   subject,
@@ -211,7 +213,8 @@ function buildMailContent({
     `${fromName} 납품서류를 보내드립니다.`,
     `품목: ${titles}`,
     `합계(부가세포함): ${fmt(totalSum)}원`,
-    `작성일: ${date || todayISO()}`,
+    `견적일: ${quoteDate || date || todayISO()}`,
+    `납품일: ${deliveryDate || date || todayISO()}`,
     "",
     `입금계좌: ${s.bank} ${s.account}`,
     `예금주: ${s.accountHolder}`,
@@ -221,7 +224,7 @@ function buildMailContent({
   const html = [
     `<p>${client || DEFAULT_CLIENT} 귀중</p>`,
     `<p>${fromName} 납품서류를 보내드립니다.</p>`,
-    `<p>품목: ${titles}<br>합계(부가세포함): ${fmt(totalSum)}원<br>작성일: ${date || todayISO()}</p>`,
+    `<p>품목: ${titles}<br>합계(부가세포함): ${fmt(totalSum)}원<br>견적일: ${quoteDate || date || todayISO()}<br>납품일: ${deliveryDate || date || todayISO()}</p>`,
     `<p>입금계좌: ${s.bank} ${s.account}<br>예금주: ${s.accountHolder}<br>문의: ${s.phone} / ${ask}</p>`,
   ].join("");
   const pdfBase64 = fs.readFileSync(filePath).toString("base64");
@@ -727,6 +730,8 @@ app.post("/api/generate", requireUser, async (req, res) => {
       photoPackageIds,
       client,
       date,
+      quoteDate,
+      deliveryDate,
       totals,
       rentalDailyIncl,
       rentalDays,
@@ -750,6 +755,8 @@ app.post("/api/generate", requireUser, async (req, res) => {
       photoPackageIds,
       client: client || DEFAULT_CLIENT,
       date: date || todayISO(),
+      quoteDate: quoteDate || date || todayISO(),
+      deliveryDate: deliveryDate || date || todayISO(),
       totals: totals || {},
       rentalDailyIncl,
       rentalDays,
@@ -784,7 +791,9 @@ app.post("/api/generate", requireUser, async (req, res) => {
         await sendDeliveryEmail(
           {
             client: client || DEFAULT_CLIENT,
-            date: date || todayISO(),
+            date: quoteDate || date || todayISO(),
+            quoteDate: quoteDate || date || todayISO(),
+            deliveryDate: deliveryDate || date || todayISO(),
             titles,
             totalSum,
             subject,

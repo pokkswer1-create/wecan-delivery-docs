@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <!-- wecan-build: 2026-08-28-naver -->
@@ -75,9 +75,11 @@
         <h2>수신 / 일자</h2>
         <label for="client">수신처</label>
         <input id="client" type="text" placeholder="수신처 입력" />
-        <label for="date">작성일자</label>
-        <input id="date" type="date" />
-        <p class="hint">오늘 날짜로 자동 입력됩니다. 필요하면 수정하세요.</p>
+        <label for="quoteDate">견적서 날짜</label>
+        <input id="quoteDate" type="date" />
+        <label for="deliveryDate">납품서 날짜</label>
+        <input id="deliveryDate" type="date" />
+        <p class="hint">둘 다 오늘로 들어갑니다. 따로 바꿀 수 있습니다. 거래명세서는 납품서 날짜를 씁니다.</p>
       </div>
 
       <div class="card">
@@ -122,7 +124,8 @@
       note: document.getElementById("note"),
       sumText: document.getElementById("sumText"),
       client: document.getElementById("client"),
-      date: document.getElementById("date"),
+      quoteDate: document.getElementById("quoteDate"),
+      deliveryDate: document.getElementById("deliveryDate"),
       sendEmail: document.getElementById("sendEmail"),
       emailTo: document.getElementById("emailTo"),
       emailCc: document.getElementById("emailCc"),
@@ -435,7 +438,9 @@
 
       const meta = await fetch("/api/meta").then((r) => readJson(r));
       els.client.value = meta.clientDefault || "";
-      els.date.value = todayLocal();
+      const today = todayLocal();
+      els.quoteDate.value = today;
+      els.deliveryDate.value = today;
       els.emailHint.textContent = meta.emailConfigured
         ? `보낸 사람 ${meta.mailFromName || "상호"} <${meta.mailFromAddress || me.email}> · 회신 ${meta.mailReplyTo || "설정 메일"}`
         : "구글 메일 권한이 없습니다. 다시 로그인해 주세요.";
@@ -526,7 +531,8 @@
             customItems,
             photoPackageIds,
             client: els.client.value.trim(),
-            date: els.date.value || todayLocal(),
+            quoteDate: els.quoteDate.value || todayLocal(),
+            deliveryDate: els.deliveryDate.value || todayLocal(),
             emailTo: els.emailTo.value.trim(),
             emailCc: els.emailCc.value.trim(),
             subject: els.subject.value.trim(),

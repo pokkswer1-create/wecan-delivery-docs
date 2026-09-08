@@ -377,13 +377,24 @@ function supplierBoxHtml() {
   </div>`;
 }
 
-function clientBoxHtml(ctx) {
+function dateKrForDoc(docType, ctx) {
+  if (docType === "quote") return ctx.quoteDateKr || ctx.dateKr;
+  return ctx.deliveryDateKr || ctx.dateKr;
+}
+
+function dateLabelForDoc(docType) {
+  if (docType === "quote") return "견적일자";
+  if (docType === "delivery") return "납품일자";
+  return "작성일자";
+}
+
+function clientBoxHtml(ctx, docType) {
   return `
   <div class="box">
     <h3>수신</h3>
     <table>
       <tr><td class="k">상호</td><td>${ctx.client}</td></tr>
-      <tr><td class="k">작성일자</td><td>${ctx.dateKr}</td></tr>
+      <tr><td class="k">${dateLabelForDoc(docType)}</td><td>${dateKrForDoc(docType, ctx)}</td></tr>
       <tr><td class="k">유효기간</td><td>견적일 기준 30일</td></tr>
     </table>
   </div>`;
@@ -484,7 +495,7 @@ function makeDocSheet(pkg, docType, ctx) {
     <div class="page">
       <h1>${titles[docType]}</h1>
       <div class="meta">
-        ${clientBoxHtml(ctx)}
+        ${clientBoxHtml(ctx, docType)}
         ${supplierBoxHtml()}
       </div>
       <div class="receiver">${ctx.client} 귀중</div>
@@ -498,7 +509,7 @@ function makeDocSheet(pkg, docType, ctx) {
       <div class="notes">
         <h4>참고사항</h4>
         <div>1. ${pkg.note}</div>
-        <div>2. 작성일자: ${ctx.dateKr}</div>
+        <div>2. ${dateLabelForDoc(docType)}: ${dateKrForDoc(docType, ctx)}</div>
         <div>3. 문서종류: ${titles[docType]} / 품목: ${pkg.title}</div>
       </div>
       ${signHtml()}
@@ -677,11 +688,17 @@ async function writeBizBankPdfs(dir) {
 }
 
 function resolveCtx(options = {}) {
-  const date = options.date || todayISO();
+  const fallback = options.date || todayISO();
+  const quoteDate = options.quoteDate || fallback;
+  const deliveryDate = options.deliveryDate || fallback;
   return {
     client: options.client || DEFAULT_CLIENT,
-    date,
-    dateKr: toDateKr(date),
+    date: quoteDate,
+    dateKr: toDateKr(quoteDate),
+    quoteDate,
+    quoteDateKr: toDateKr(quoteDate),
+    deliveryDate,
+    deliveryDateKr: toDateKr(deliveryDate),
   };
 }
 
@@ -852,6 +869,8 @@ async function buildFromRequest(req) {
   const options = {
     client: req.client,
     date: req.date,
+    quoteDate: req.quoteDate,
+    deliveryDate: req.deliveryDate,
   };
 
   if (req.mode === "combined" || packages.length > 1) {
@@ -904,6 +923,8 @@ module.exports = {
   buildCombined,
   buildFromRequest,
   resolvePackages,
+  resolveCtx,
+  makeDocSheet,
   todayISO,
   fmt,
 };
