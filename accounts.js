@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { resolveDataRoot } = require("./data-root");
 
 const COOKIE = "wecan_sess";
 
@@ -9,11 +10,11 @@ function userDir(root, sub) {
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
     throw new Error("구글 계정 식별자가 올바르지 않습니다.");
   }
-  return path.join(root, "data", "users", id);
+  return path.join(resolveDataRoot(root), "users", id);
 }
 
 function listUserIds(root) {
-  const dir = path.join(root, "data", "users");
+  const dir = path.join(resolveDataRoot(root), "users");
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir, { withFileTypes: true })
@@ -35,7 +36,9 @@ function migrateLegacyIfFirstUser(root, sub) {
     return dest;
   }
   if (fs.existsSync(path.join(dest, "supplier.json"))) return dest;
-  const legacy = path.join(root, "data");
+  const live = resolveDataRoot(root);
+  const seed = path.join(root, "data");
+  const legacy = fs.existsSync(path.join(live, "supplier.json")) ? live : seed;
   copyIfExists(path.join(legacy, "supplier.json"), path.join(dest, "supplier.json"));
   copyIfExists(path.join(legacy, "presets.json"), path.join(dest, "presets.json"));
   copyIfExists(path.join(legacy, "seal.png"), path.join(dest, "seal.png"));

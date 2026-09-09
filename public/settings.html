@@ -6,6 +6,7 @@
   <title>설정 · 납품서류</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/app.css?v=20260828" />
+  <script src="/settings-backup.js"></script>
 </head>
 <body>
   <div class="topbar"><a class="logo" href="/">위캔</a></div>
@@ -200,14 +201,88 @@
       setSealPreview(!!(files && files.seal));
     }
 
+    function readBackup() {
+      try {
+        return JSON.parse(localStorage.getItem(SettingsBackup.KEY) || "null");
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function writeBackup(patch) {
+      const prev = readBackup() || { supplier: {}, files: {} };
+      const next = {
+        supplier: patch.supplier != null ? patch.supplier : prev.supplier,
+        files: Object.assign({}, prev.files || {}, patch.files || {}),
+      };
+      if (patch.removeFile) delete next.files[patch.removeFile];
+      try {
+        localStorage.setItem(SettingsBackup.KEY, JSON.stringify(next));
+      } catch (_) {}
+    }
+
     async function loadSupplier() {
       const res = await fetch("/api/supplier");
       const data = await readJson(res);
       if (!data.ok) throw new Error(data.error || "불러오기 실패");
-      fillForm(data.supplier || {});
-      setCompleteHint(data.complete, data.missing);
-      setFileStatus(data.files);
+      let supplier = data.supplier || {};
+      let files = data.files || {};
+      let complete = data.complete;
+      let missing = data.missing;
+      const backup = readBackup();
+      if (backup && SettingsBackup.shouldRestoreSupplier(supplier, backup.supplier)) {
+        const put = await fetch("/api/supplier", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ supplier: backup.supplier }),
+        });
+        const saved = await readJson(put);
+        if (saved.ok) {
+          supplier = saved.supplier || backup.supplier;
+          complete = saved.complete;
+          missing = saved.missing;
+          show(els.saveStatus, "ok", "서버가 비어서, 이 폰에 있던 설정을 다시 넣었습니다.");
+        }
+      } else if (SettingsBackup.filledCount(supplier) > 0) {
+        writeBackup({ supplier });
+      }
+      const lost = backup ? SettingsBackup.missingFileKinds(files, backup.files) : [];
+      for (const kind of lost) {
+        const image = backup.files[kind];
+        const put = await fetch("/api/supplier-file", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind, image }),
+        });
+        const saved = await readJson(put);
+        if (saved.ok) files = saved.files || files;
+      }
+      fillForm(supplier);
+      setCompleteHint(complete, missing);
+      setFileStatus(files);
       els.form.classList.remove("hidden");
+      await snapshotServerFiles(files);
+    }
+
+    async function snapshotServerFiles(files) {
+      const patch = {};
+      for (const kind of ["seal", "biz", "bank"]) {
+        if (!(files && files[kind])) continue;
+        const backup = readBackup();
+        if (backup && backup.files && backup.files[kind]) continue;
+        try {
+          const res = await fetch("/api/supplier-file?kind=" + kind + "&t=" + Date.now());
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          patch[kind] = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(new Error("read"));
+            r.readAsDataURL(blob);
+          });
+        } catch (_) {}
+      }
+      if (Object.keys(patch).length) writeBackup({ files: patch });
     }
 
     async function init() {
@@ -251,8 +326,9 @@
         if (!data.ok) throw new Error(data.error || "저장 실패");
         fillForm(data.supplier || {});
         setCompleteHint(data.complete, data.missing);
+        writeBackup({ supplier: data.supplier || readForm() });
         show(els.saveStatus, "ok", data.complete
-          ? "저장됨. 이제 서류에 이 정보가 찍힙니다."
+          ? "저장됨. 이 폰에도 넣어 두었습니다. 서버가 꺼져도 다시 불러옵니다."
           : "저장됨. 아직 빈 칸이 있으면 서류가 안 만들어집니다.");
       } catch (err) {
         show(els.saveStatus, "err", err.message);
@@ -283,6 +359,7 @@
           });
           const data = await readJson(res);
           if (!data.ok) throw new Error(data.error || "삭제 실패");
+          writeBackup({ removeFile: kind });
           setFileStatus(data.files);
           show(els.fileStatus, "ok", "삭제됨.");
         } catch (err) {
@@ -305,8 +382,9 @@
           });
           const data = await readJson(res);
           if (!data.ok) throw new Error(data.error || "올리기 실패");
+          writeBackup({ files: { [kind]: image } });
           setFileStatus(data.files);
-          show(els.fileStatus, "ok", "올렸습니다.");
+          show(els.fileStatus, "ok", "올렸습니다. 이 폰에도 넣어 두었습니다.");
         } catch (err) {
           show(els.fileStatus, "err", err.message);
         }

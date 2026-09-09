@@ -18,6 +18,9 @@ const {
 } = require("./generate");
 const { saveSupplierToDataDir, isComplete, missingFields } = require("./supplier");
 const { mailEnvelope } = require("./mail-envelope");
+const { resolveDataRoot } = require("./data-root");
+const { packUserDir, restoreUserDir, hasSupplier } = require("./user-bundle");
+const { createDurableStore, isDurableConfigured } = require("./durable-store");
 const {
   userDir,
   listUserIds,
@@ -38,9 +41,35 @@ const {
 } = require("./google-oauth");
 
 const PORT = Number(process.env.PORT || 3780);
-const ROOT_DATA = path.join(__dirname, "data");
+const ROOT_DATA = resolveDataRoot(__dirname);
 const RECEIPTS_DIR = path.join(ROOT_DATA, "receipts");
+const durable = createDurableStore(process.env);
 const app = express();
+
+async function persistUser(sub, dir) {
+  if (!durable || !sub || !dir) return { ok: false, skipped: true };
+  try {
+    await durable.save(sub, packUserDir(dir));
+    return { ok: true };
+  } catch (err) {
+    console.error("durable save failed:", err.message || err);
+    return { ok: false, error: err.message || String(err) };
+  }
+}
+
+async function hydrateUser(sub, dir) {
+  if (!durable || !sub || !dir) return false;
+  try {
+    const bundle = await durable.load(sub);
+    if (!bundle) return false;
+    if (hasSupplier(dir)) return false;
+    restoreUserDir(dir, bundle);
+    return true;
+  } catch (err) {
+    console.error("durable load failed:", err.message || err);
+    return false;
+  }
+}
 
 function sessionSecret() {
   return String(process.env.SESSION_SECRET || process.env.GOOGLE_CLIENT_SECRET || "").trim();
@@ -311,12 +340,18 @@ app.get("/auth/google/callback", async (req, res) => {
     }
     const result = await exchangeGoogleCode(googleRedirectUri(req), String(req.query.code));
     if (!result.sub) throw new Error("구글 계정 정보를 읽지 못했습니다.");
-    const dir = migrateLegacyIfFirstUser(__dirname, result.sub);
+    const dest = userDir(__dirname, result.sub);
+    fs.mkdirSync(dest, { recursive: true });
+    await hydrateUser(result.sub, dest);
+    if (!hasSupplier(dest)) {
+      migrateLegacyIfFirstUser(__dirname, result.sub);
+    }
     saveGoogleTokens(
-      dir,
+      dest,
       { ...result.tokens, email: result.email },
       sessionSecret()
     );
+    await persistUser(result.sub, dest);
     const token = signSession({ sub: result.sub, email: result.email }, sessionSecret());
     const secure = req.secure || req.get("x-forwarded-proto") === "https";
     res.append("Set-Cookie", sessionCookie(token, { secure }));
@@ -332,7 +367,7 @@ app.get("/auth/logout", (_req, res) => {
   res.redirect("/");
 });
 
-app.get("/api/me", (req, res) => {
+app.get("/api/me", async (req, res) => {
   if (!req.user) {
     return res.json({
       ok: false,
@@ -340,6 +375,7 @@ app.get("/api/me", (req, res) => {
       googleConfigured: isGoogleConfigured() && Boolean(sessionSecret()),
     });
   }
+  await hydrateUser(req.user.sub, req.userDir);
   const tokens = loadGoogleTokens(req.userDir, sessionSecret());
   res.json({
     ok: true,
@@ -347,6 +383,7 @@ app.get("/api/me", (req, res) => {
     email: req.user.email,
     googleConfigured: true,
     gmailReady: Boolean(tokens && tokens.refresh_token),
+    durable: isDurableConfigured(),
   });
 });
 
@@ -602,7 +639,7 @@ app.get("/api/presets", requireUser, (req, res) => {
   res.json({ ok: true, updatedAt: data.updatedAt, presets: data.presets });
 });
 
-app.put("/api/presets", requireUser, (req, res) => {
+app.put("/api/presets", requireUser, async (req, res) => {
   try {
     const { presets } = req.body || {};
     if (!Array.isArray(presets)) {
@@ -620,6 +657,7 @@ app.put("/api/presets", requireUser, (req, res) => {
       }))
       .filter((p) => p.title && p.name);
     const saved = writePresets(cleaned, req.userDir);
+    await persistUser(req.user.sub, req.userDir);
     res.json({ ok: true, updatedAt: saved.updatedAt, presets: cleaned });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "저장 실패" });
@@ -651,7 +689,9 @@ function supplierFiles(dir) {
   };
 }
 
-app.get("/api/supplier", requireUser, (req, res) => {
+app.get("/api/supplier", requireUser, async (req, res) => {
+  await hydrateUser(req.user.sub, req.userDir);
+  setActiveDataDir(req.userDir);
   const supplier = getSupplier();
   res.json({
     ok: true,
@@ -662,22 +702,26 @@ app.get("/api/supplier", requireUser, (req, res) => {
   });
 });
 
-app.put("/api/supplier", requireUser, (req, res) => {
+app.put("/api/supplier", requireUser, async (req, res) => {
   try {
     const { supplier } = req.body || {};
     const saved = saveSupplierToDataDir(req.userDir, supplier);
+    const seedDir = path.join(__dirname, "data");
+    saveSupplierToDataDir(seedDir, saved);
+    const remote = await persistUser(req.user.sub, req.userDir);
     res.json({
       ok: true,
       supplier: saved,
       complete: isComplete(saved),
       missing: missingFields(saved),
+      durable: Boolean(String(process.env.DATA_DIR || "").trim()) || remote.ok === true,
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "저장 실패" });
   }
 });
 
-app.put("/api/supplier-file", requireUser, (req, res) => {
+app.put("/api/supplier-file", requireUser, async (req, res) => {
   try {
     const { kind, image } = req.body || {};
     const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
@@ -697,13 +741,14 @@ app.put("/api/supplier-file", requireUser, (req, res) => {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, buf);
     if (kind !== "seal") resetBizBankCache();
+    await persistUser(req.user.sub, req.userDir);
     res.json({ ok: true, files: supplierFiles(req.userDir) });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "파일 저장 실패" });
   }
 });
 
-app.delete("/api/supplier-file", requireUser, (req, res) => {
+app.delete("/api/supplier-file", requireUser, async (req, res) => {
   try {
     const { kind } = req.body || {};
     const names = { seal: "seal.png", biz: "biz_reg.png", bank: "bank.png" };
@@ -714,6 +759,7 @@ app.delete("/api/supplier-file", requireUser, (req, res) => {
     const dest = path.join(req.userDir, file);
     if (fs.existsSync(dest)) fs.unlinkSync(dest);
     if (kind !== "seal") resetBizBankCache();
+    await persistUser(req.user.sub, req.userDir);
     res.json({ ok: true, files: supplierFiles(req.userDir) });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message || "삭제 실패" });

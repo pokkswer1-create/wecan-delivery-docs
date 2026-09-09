@@ -13,3 +13,9 @@ services:
         sync: false
       - key: PUBLIC_URL
         value: https://wecan-docs.onrender.com
+      - key: DATA_DIR
+        sync: false
+      - key: WECAN_TURSO_URL
+        sync: false
+      - key: WECAN_TURSO_AUTH_TOKEN
+        sync: false
