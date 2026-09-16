@@ -115,6 +115,12 @@ function clearSessionCookie() {
   return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
+function safeReturnPath(raw) {
+  const p = String(raw || "").trim();
+  if (p === "/settings.html" || p === "/history.html" || p === "/") return p;
+  return "/";
+}
+
 function encryptSecret(plain, secret) {
   const iv = crypto.randomBytes(12);
   const key = keyFromSecret(secret);
@@ -182,4 +188,5 @@ module.exports = {
   saveGoogleTokens,
   loadGoogleTokens,
   getCookie,
+  safeReturnPath,
 };

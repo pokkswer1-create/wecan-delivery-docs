@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>위캔 납품서류</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="/app.css?v=20260828" />
+  <link rel="stylesheet" href="/app.css?v=20260914" />
 </head>
 <body>
   <div class="topbar"><a class="logo" href="/">위캔</a></div>
@@ -31,9 +31,13 @@
     </div>
     <div class="user-bar hidden" id="userBar">
       <span id="userEmail"></span>
-      <a href="/auth/logout">로그아웃</a>
+      <span class="user-actions">
+        <a href="/settings.html">회사 수정</a>
+        <a href="/auth/logout">로그아웃</a>
+      </span>
     </div>
     <form id="form" class="hidden">
+      <a class="google-btn" href="/settings.html" style="margin-bottom:12px">회사 정보 수정</a>
       <div class="card">
         <h2>문서 제목</h2>
         <input id="docTitle" type="text" placeholder="예: 지주대 임대 / 심판대 납품" value="납품" />

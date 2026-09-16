@@ -32,6 +32,7 @@ const {
   saveGoogleTokens,
   loadGoogleTokens,
   getCookie,
+  safeReturnPath,
 } = require("./accounts");
 const {
   isGoogleConfigured,
@@ -325,9 +326,14 @@ app.get("/auth/google", (req, res) => {
       .send("구글 로그인이 아직 설정되지 않았습니다. GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET을 Render/로컬 환경변수에 넣으세요.");
   }
   const state = crypto.randomBytes(16).toString("hex");
+  const next = safeReturnPath(req.query.next);
   res.append(
     "Set-Cookie",
     `wecan_oauth=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
+  );
+  res.append(
+    "Set-Cookie",
+    `wecan_next=${encodeURIComponent(next)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
   );
   res.redirect(googleAuthUrl(googleRedirectUri(req), state));
 });
@@ -356,7 +362,9 @@ app.get("/auth/google/callback", async (req, res) => {
     const secure = req.secure || req.get("x-forwarded-proto") === "https";
     res.append("Set-Cookie", sessionCookie(token, { secure }));
     res.append("Set-Cookie", "wecan_oauth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
-    res.redirect("/");
+    const next = safeReturnPath(decodeURIComponent(getCookie(req.headers.cookie, "wecan_next") || "/"));
+    res.append("Set-Cookie", "wecan_next=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+    res.redirect(next);
   } catch (err) {
     res.redirect("/?auth_error=" + encodeURIComponent(err.message || "로그인 실패"));
   }

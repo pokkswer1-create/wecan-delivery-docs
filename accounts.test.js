@@ -51,6 +51,15 @@ test("bad session is null", () => {
   assert.equal(readSession("wecan_sess=nope", "secret"), null);
 });
 
+test("safeReturnPath only allows app pages", () => {
+  const { safeReturnPath } = require("./accounts");
+  assert.equal(safeReturnPath("/settings.html"), "/settings.html");
+  assert.equal(safeReturnPath("/history.html"), "/history.html");
+  assert.equal(safeReturnPath("/"), "/");
+  assert.equal(safeReturnPath("https://evil.example"), "/");
+  assert.equal(safeReturnPath("/auth/google"), "/");
+});
+
 test("token encrypt roundtrip", () => {
   const secret = "another-secret-value";
   const enc = encryptSecret("refresh-token-value", secret);

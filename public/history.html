@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>발송 이력 · 위캔</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="/app.css?v=20260828" />
+  <link rel="stylesheet" href="/app.css?v=20260914" />
 </head>
 <body>
   <div class="topbar"><a class="logo" href="/">위캔</a></div>
@@ -23,12 +23,15 @@
     <div class="card" id="loginCard">
       <h2>구글 로그인</h2>
       <p class="hint">로그인하면 이 계정이 보낸 이력을 봅니다.</p>
-      <a class="google-btn" href="/auth/google">Google로 로그인</a>
+      <a class="google-btn" href="/auth/google?next=/history.html">Google로 로그인</a>
       <div class="status" id="authError"></div>
     </div>
     <div class="user-bar hidden" id="userBar">
       <span id="userEmail"></span>
-      <a href="/auth/logout">로그아웃</a>
+      <span class="user-actions">
+        <a href="/settings.html">회사 수정</a>
+        <a href="/auth/logout">로그아웃</a>
+      </span>
     </div>
 
     <div class="card hidden" id="listCard">
