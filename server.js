@@ -23,6 +23,7 @@ const { packUserDir, restoreUserDir, hasSupplier } = require("./user-bundle");
 const { createDurableStore, isDurableConfigured } = require("./durable-store");
 const { readMaybeEncryptedFile, writeEncryptedFile } = require("./file-crypto");
 const {
+  COOKIE,
   userDir,
   listUserIds,
   migrateLegacyIfFirstUser,
@@ -35,8 +36,7 @@ const {
   safeReturnPath,
   signOAuthState,
   readOAuthState,
-  embedAuthBoot,
-  pageFileForReturnPath,
+  authEstablishHtml,
 } = require("./accounts");
 const {
   isGoogleConfigured,
@@ -132,7 +132,7 @@ app.use((req, _res, next) => {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-07-31-no-receipt-body";
+const APP_VERSION = "2026-09-17-login";
 
 app.get(["/stamp", "/stamp.html"], (_req, res) => {
   res.redirect(301, "/settings.html");
@@ -367,14 +367,24 @@ app.get("/auth/google/callback", async (req, res) => {
     );
     await persistUser(result.sub, dest);
     const token = signSession({ sub: result.sub, email: result.email }, sessionSecret());
-    const page = fs.readFileSync(path.join(PUBLIC_DIR, pageFileForReturnPath(next)), "utf8");
     res.append("Set-Cookie", sessionCookie(token, { secure: cookieSecure(req) }));
     res.set("Cache-Control", "no-store");
-    res.status(200).type("html").send(embedAuthBoot(page, next));
+    res.status(200).type("html").send(authEstablishHtml(token, next));
   } catch (err) {
     const sep = next.includes("?") ? "&" : "?";
     res.redirect(next + sep + "auth_error=" + encodeURIComponent(err.message || "로그인 실패"));
   }
+});
+
+app.post("/auth/session", (req, res) => {
+  const token = String((req.body && req.body.token) || "").trim();
+  const user = sessionSecret() ? readSession(`${COOKIE}=${token}`, sessionSecret()) : null;
+  if (!user) {
+    return res.status(401).json({ ok: false, loggedIn: false, error: "로그인이 만료되었습니다. 다시 눌러 주세요." });
+  }
+  res.append("Set-Cookie", sessionCookie(token, { secure: cookieSecure(req) }));
+  res.set("Cache-Control", "no-store");
+  res.json({ ok: true, loggedIn: true, email: user.email });
 });
 
 app.get("/auth/logout", (req, res) => {

@@ -97,6 +97,15 @@ test("embedAuthBoot keeps the company page and only rewrites the url", () => {
   assert.equal(pageFileForReturnPath("https://evil.example"), "index.html");
 });
 
+test("authEstablishHtml posts the session then stays on settings", () => {
+  const { authEstablishHtml } = require("./accounts");
+  const html = authEstablishHtml("tok.en", "/settings.html");
+  assert.match(html, /\/auth\/session/);
+  assert.match(html, /"tok\.en"/);
+  assert.match(html, /\/settings\.html/);
+  assert.equal(authEstablishHtml("tok", "https://evil.example").includes("evil"), false);
+});
+
 test("token encrypt roundtrip", () => {
   const secret = "another-secret-value";
   const enc = encryptSecret("refresh-token-value", secret);

@@ -181,6 +181,34 @@ function embedAuthBoot(html, next) {
   return boot + src;
 }
 
+function authEstablishHtml(token, next) {
+  const dest = safeReturnPath(next);
+  const errUrl = dest + (dest.includes("?") ? "&" : "?") + "auth_error=";
+  return `<!doctype html>
+<meta charset="utf-8">
+<title>로그인</title>
+<p>로그인 중입니다.</p>
+<script>
+(async function () {
+  try {
+    const res = await fetch("/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      cache: "no-store",
+      body: JSON.stringify({ token: ${JSON.stringify(String(token || ""))} })
+    });
+    const data = await res.json().catch(function () { return {}; });
+    if (!res.ok || !data.ok) throw new Error(data.error || "로그인 실패");
+    location.replace(${JSON.stringify(dest)});
+  } catch (err) {
+    location.replace(${JSON.stringify(errUrl)} + encodeURIComponent(err.message || "로그인 실패"));
+  }
+})();
+</script>
+`;
+}
+
 function encryptSecret(plain, secret) {
   const iv = crypto.randomBytes(12);
   const key = keyFromSecret(secret);
@@ -254,4 +282,5 @@ module.exports = {
   authContinueHtml,
   embedAuthBoot,
   pageFileForReturnPath,
+  authEstablishHtml,
 };
