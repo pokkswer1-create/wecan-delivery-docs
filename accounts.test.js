@@ -60,6 +60,31 @@ test("safeReturnPath only allows app pages", () => {
   assert.equal(safeReturnPath("/auth/google"), "/");
 });
 
+test("oauth state roundtrip keeps settings return path without a cookie", () => {
+  const { signOAuthState, readOAuthState } = require("./accounts");
+  const secret = "oauth-state-secret";
+  const state = signOAuthState("/settings.html", secret);
+  const parsed = readOAuthState(state, secret);
+  assert.equal(parsed.next, "/settings.html");
+});
+
+test("oauth state rejects tampering and foreign return urls", () => {
+  const { signOAuthState, readOAuthState } = require("./accounts");
+  const secret = "oauth-state-secret";
+  assert.equal(readOAuthState("nope", secret), null);
+  const state = signOAuthState("https://evil.example", secret);
+  assert.equal(readOAuthState(state, secret).next, "/");
+  assert.equal(readOAuthState(state.slice(0, -2) + "ab", secret), null);
+});
+
+test("authContinueHtml stays on app pages", () => {
+  const { authContinueHtml } = require("./accounts");
+  const html = authContinueHtml("/settings.html");
+  assert.match(html, /location\.replace\("\/settings\.html"\)/);
+  assert.equal(authContinueHtml("https://evil.example").includes("evil"), false);
+  assert.match(authContinueHtml("https://evil.example"), /location\.replace\("\/"\)/);
+});
+
 test("token encrypt roundtrip", () => {
   const secret = "another-secret-value";
   const enc = encryptSecret("refresh-token-value", secret);

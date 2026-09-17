@@ -32,8 +32,10 @@ const {
   clearSessionCookie,
   saveGoogleTokens,
   loadGoogleTokens,
-  getCookie,
   safeReturnPath,
+  signOAuthState,
+  readOAuthState,
+  authContinueHtml,
 } = require("./accounts");
 const {
   isGoogleConfigured,
@@ -47,6 +49,8 @@ const ROOT_DATA = resolveDataRoot(__dirname);
 const RECEIPTS_DIR = path.join(ROOT_DATA, "receipts");
 const durable = createDurableStore(process.env);
 const app = express();
+app.set("trust proxy", 1);
+app.set("etag", false);
 
 async function persistUser(sub, dir) {
   if (!durable || !sub || !dir) return { ok: false, skipped: true };
@@ -321,29 +325,29 @@ function googleRedirectUri(req) {
   return `${publicBase(req)}/auth/google/callback`;
 }
 
+function cookieSecure(req) {
+  return (
+    req.secure ||
+    req.get("x-forwarded-proto") === "https" ||
+    String(process.env.PUBLIC_URL || "").startsWith("https://")
+  );
+}
+
 app.get("/auth/google", (req, res) => {
   if (!isGoogleConfigured() || !sessionSecret()) {
     return res
       .status(503)
       .send("구글 로그인이 아직 설정되지 않았습니다. GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET을 Render/로컬 환경변수에 넣으세요.");
   }
-  const state = crypto.randomBytes(16).toString("hex");
   const next = safeReturnPath(req.query.next);
-  res.append(
-    "Set-Cookie",
-    `wecan_oauth=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
-  );
-  res.append(
-    "Set-Cookie",
-    `wecan_next=${encodeURIComponent(next)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
-  );
+  const state = signOAuthState(next, sessionSecret());
   res.redirect(googleAuthUrl(googleRedirectUri(req), state));
 });
 
 app.get("/auth/google/callback", async (req, res) => {
   try {
-    const expected = getCookie(req.headers.cookie, "wecan_oauth");
-    if (!req.query.code || !req.query.state || req.query.state !== expected) {
+    const parsed = readOAuthState(req.query.state, sessionSecret());
+    if (!req.query.code || !parsed) {
       throw new Error("로그인 확인 값이 맞지 않습니다. 다시 눌러 주세요.");
     }
     const result = await exchangeGoogleCode(googleRedirectUri(req), String(req.query.code));
@@ -361,19 +365,16 @@ app.get("/auth/google/callback", async (req, res) => {
     );
     await persistUser(result.sub, dest);
     const token = signSession({ sub: result.sub, email: result.email }, sessionSecret());
-    const secure = req.secure || req.get("x-forwarded-proto") === "https";
-    res.append("Set-Cookie", sessionCookie(token, { secure }));
-    res.append("Set-Cookie", "wecan_oauth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
-    const next = safeReturnPath(decodeURIComponent(getCookie(req.headers.cookie, "wecan_next") || "/"));
-    res.append("Set-Cookie", "wecan_next=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
-    res.redirect(next);
+    res.append("Set-Cookie", sessionCookie(token, { secure: cookieSecure(req) }));
+    res.set("Cache-Control", "no-store");
+    res.status(200).type("html").send(authContinueHtml(parsed.next));
   } catch (err) {
     res.redirect("/?auth_error=" + encodeURIComponent(err.message || "로그인 실패"));
   }
 });
 
-app.get("/auth/logout", (_req, res) => {
-  res.append("Set-Cookie", clearSessionCookie());
+app.get("/auth/logout", (req, res) => {
+  res.append("Set-Cookie", clearSessionCookie({ secure: cookieSecure(req) }));
   res.redirect("/");
 });
 

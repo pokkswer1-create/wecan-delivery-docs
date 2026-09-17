@@ -111,14 +111,59 @@ function sessionCookie(token, { secure } = {}) {
   return parts.join("; ");
 }
 
-function clearSessionCookie() {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+function clearSessionCookie({ secure } = {}) {
+  const parts = [`${COOKIE}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
+  if (secure) parts.push("Secure");
+  return parts.join("; ");
 }
 
 function safeReturnPath(raw) {
   const p = String(raw || "").trim();
   if (p === "/settings.html" || p === "/history.html" || p === "/") return p;
   return "/";
+}
+
+function signOAuthState(next, secret) {
+  const body = Buffer.from(
+    JSON.stringify({
+      next: safeReturnPath(next),
+      exp: Date.now() + 10 * 60 * 1000,
+      n: crypto.randomBytes(8).toString("hex"),
+    }),
+    "utf8"
+  ).toString("base64url");
+  const sig = crypto.createHmac("sha256", keyFromSecret(secret)).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
+function readOAuthState(state, secret) {
+  const raw = String(state || "");
+  const i = raw.lastIndexOf(".");
+  if (i < 1 || !secret) return null;
+  const body = raw.slice(0, i);
+  const sig = raw.slice(i + 1);
+  const expect = crypto.createHmac("sha256", keyFromSecret(secret)).update(body).digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expect);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    if (!data || data.exp < Date.now()) return null;
+    return { next: safeReturnPath(data.next) };
+  } catch (_) {
+    return null;
+  }
+}
+
+function authContinueHtml(next) {
+  const dest = safeReturnPath(next);
+  return `<!doctype html>
+<meta charset="utf-8">
+<title>로그인</title>
+<meta http-equiv="refresh" content="0;url=${dest}">
+<p>로그인했습니다. 잠시만요.</p>
+<script>location.replace(${JSON.stringify(dest)});</script>
+`;
 }
 
 function encryptSecret(plain, secret) {
@@ -189,4 +234,7 @@ module.exports = {
   loadGoogleTokens,
   getCookie,
   safeReturnPath,
+  signOAuthState,
+  readOAuthState,
+  authContinueHtml,
 };
