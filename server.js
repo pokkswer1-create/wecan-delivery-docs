@@ -35,7 +35,8 @@ const {
   safeReturnPath,
   signOAuthState,
   readOAuthState,
-  authContinueHtml,
+  embedAuthBoot,
+  pageFileForReturnPath,
 } = require("./accounts");
 const {
   isGoogleConfigured,
@@ -345,8 +346,9 @@ app.get("/auth/google", (req, res) => {
 });
 
 app.get("/auth/google/callback", async (req, res) => {
+  const parsed = readOAuthState(req.query.state, sessionSecret());
+  const next = parsed ? parsed.next : "/";
   try {
-    const parsed = readOAuthState(req.query.state, sessionSecret());
     if (!req.query.code || !parsed) {
       throw new Error("로그인 확인 값이 맞지 않습니다. 다시 눌러 주세요.");
     }
@@ -365,11 +367,13 @@ app.get("/auth/google/callback", async (req, res) => {
     );
     await persistUser(result.sub, dest);
     const token = signSession({ sub: result.sub, email: result.email }, sessionSecret());
+    const page = fs.readFileSync(path.join(PUBLIC_DIR, pageFileForReturnPath(next)), "utf8");
     res.append("Set-Cookie", sessionCookie(token, { secure: cookieSecure(req) }));
     res.set("Cache-Control", "no-store");
-    res.status(200).type("html").send(authContinueHtml(parsed.next));
+    res.status(200).type("html").send(embedAuthBoot(page, next));
   } catch (err) {
-    res.redirect("/?auth_error=" + encodeURIComponent(err.message || "로그인 실패"));
+    const sep = next.includes("?") ? "&" : "?";
+    res.redirect(next + sep + "auth_error=" + encodeURIComponent(err.message || "로그인 실패"));
   }
 });
 

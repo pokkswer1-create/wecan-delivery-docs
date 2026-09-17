@@ -85,6 +85,18 @@ test("authContinueHtml stays on app pages", () => {
   assert.match(authContinueHtml("https://evil.example"), /location\.replace\("\/"\)/);
 });
 
+test("embedAuthBoot keeps the company page and only rewrites the url", () => {
+  const { embedAuthBoot, pageFileForReturnPath } = require("./accounts");
+  const html = embedAuthBoot("<head><title>설정</title></head><body>회사</body>", "/settings.html");
+  assert.match(html, /history\.replaceState\(null,"","\/settings\.html"\)/);
+  assert.match(html, /회사/);
+  assert.equal(html.includes("location.replace"), false);
+  assert.equal(embedAuthBoot("<head></head>", "https://evil.example").includes("evil"), false);
+  assert.equal(pageFileForReturnPath("/settings.html"), "settings.html");
+  assert.equal(pageFileForReturnPath("/"), "index.html");
+  assert.equal(pageFileForReturnPath("https://evil.example"), "index.html");
+});
+
 test("token encrypt roundtrip", () => {
   const secret = "another-secret-value";
   const enc = encryptSecret("refresh-token-value", secret);

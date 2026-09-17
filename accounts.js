@@ -166,6 +166,21 @@ function authContinueHtml(next) {
 `;
 }
 
+function pageFileForReturnPath(next) {
+  const p = safeReturnPath(next);
+  if (p === "/settings.html") return "settings.html";
+  if (p === "/history.html") return "history.html";
+  return "index.html";
+}
+
+function embedAuthBoot(html, next) {
+  const dest = safeReturnPath(next);
+  const boot = `<script>try{history.replaceState(null,"",${JSON.stringify(dest)});}catch(e){}</script>`;
+  const src = String(html || "");
+  if (src.includes("</head>")) return src.replace("</head>", `${boot}</head>`);
+  return boot + src;
+}
+
 function encryptSecret(plain, secret) {
   const iv = crypto.randomBytes(12);
   const key = keyFromSecret(secret);
@@ -237,4 +252,6 @@ module.exports = {
   signOAuthState,
   readOAuthState,
   authContinueHtml,
+  embedAuthBoot,
+  pageFileForReturnPath,
 };
