@@ -94,8 +94,9 @@ function presetsPath(dir) {
 
 app.use(express.json({ limit: "8mb" }));
 app.use((req, res, next) => {
-  if (req.path === "/" || req.path.endsWith(".html")) {
+  if (req.path === "/" || req.path.endsWith(".html") || req.path.startsWith("/api/")) {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.set("Pragma", "no-cache");
   }
   next();
 });
@@ -377,6 +378,7 @@ app.get("/auth/logout", (_req, res) => {
 });
 
 app.get("/api/me", async (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   if (!req.user) {
     return res.json({
       ok: false,
@@ -384,14 +386,22 @@ app.get("/api/me", async (req, res) => {
       googleConfigured: isGoogleConfigured() && Boolean(sessionSecret()),
     });
   }
-  await hydrateUser(req.user.sub, req.userDir);
-  const tokens = loadGoogleTokens(req.userDir, sessionSecret());
+  try {
+    await hydrateUser(req.user.sub, req.userDir);
+  } catch (_) {}
+  let gmailReady = false;
+  try {
+    const tokens = req.userDir
+      ? loadGoogleTokens(req.userDir, sessionSecret())
+      : null;
+    gmailReady = Boolean(tokens && tokens.refresh_token);
+  } catch (_) {}
   res.json({
     ok: true,
     loggedIn: true,
     email: req.user.email,
     googleConfigured: true,
-    gmailReady: Boolean(tokens && tokens.refresh_token),
+    gmailReady,
     durable: isDurableConfigured(),
   });
 });
@@ -981,18 +991,22 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ ok: false, error: err.message || "서버 오류" });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`위캔 납품서류 웹폼 실행 중`);
-  console.log(`  PC:   http://localhost:${PORT}`);
-  for (const ip of lanAddresses()) {
-    console.log(`  폰:   http://${ip}:${PORT}`);
-  }
-  console.log(`  GOOGLE: ${isGoogleConfigured() && sessionSecret() ? "on" : "off"}`);
-  console.log(`  EMAIL: ${emailProviderName()}`);
-  if (process.env.PUBLIC_URL) {
-    console.log(`  공개: ${process.env.PUBLIC_URL}`);
-  }
-  try {
-    require("./pdf").warmBrowser();
-  } catch (_) {}
-});
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`위캔 납품서류 웹폼 실행 중`);
+    console.log(`  PC:   http://localhost:${PORT}`);
+    for (const ip of lanAddresses()) {
+      console.log(`  폰:   http://${ip}:${PORT}`);
+    }
+    console.log(`  GOOGLE: ${isGoogleConfigured() && sessionSecret() ? "on" : "off"}`);
+    console.log(`  EMAIL: ${emailProviderName()}`);
+    if (process.env.PUBLIC_URL) {
+      console.log(`  공개: ${process.env.PUBLIC_URL}`);
+    }
+    try {
+      require("./pdf").warmBrowser();
+    } catch (_) {}
+  });
+}
+
+module.exports = { app };

@@ -309,7 +309,7 @@
         els.authError.className = "status show err";
         els.authError.textContent = authErr;
       }
-      const me = await fetch("/api/me").then((r) => readJson(r));
+      const me = await fetch("/api/me", { cache: "no-store", credentials: "include" }).then((r) => readJson(r));
       if (!me.loggedIn) {
         if (!me.googleConfigured && !authErr) {
           els.authError.className = "status show err";
