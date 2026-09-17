@@ -33,6 +33,24 @@ test("pack then restore survives wiping the user folder", () => {
   assert.equal(fs.readFileSync(path.join(dir, "seal.png")).toString(), "png-bytes");
 });
 
+test("missingPackedFiles finds images gone from disk", () => {
+  const { missingPackedFiles } = require("./user-bundle");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wecan-miss-"));
+  fs.writeFileSync(
+    path.join(dir, "supplier.json"),
+    JSON.stringify({ name: "위캔" }),
+    "utf8",
+  );
+  const bundle = {
+    files: {
+      "supplier.json": { encoding: "utf8", content: "{\"name\":\"위캔\"}" },
+      "seal.png": { encoding: "base64", content: Buffer.from("seal").toString("base64") },
+      "biz_reg.png": { encoding: "base64", content: Buffer.from("biz").toString("base64") },
+    },
+  };
+  assert.deepEqual(missingPackedFiles(dir, bundle).sort(), ["biz_reg.png", "seal.png"]);
+});
+
 test("durable store roundtrip after empty local dir", async () => {
   const store = memoryDurableStore();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wecan-dur-"));

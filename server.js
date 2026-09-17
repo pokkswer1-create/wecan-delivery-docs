@@ -19,7 +19,7 @@ const {
 const { saveSupplierToDataDir, isComplete, missingFields } = require("./supplier");
 const { mailEnvelope } = require("./mail-envelope");
 const { resolveDataRoot } = require("./data-root");
-const { packUserDir, restoreUserDir, hasSupplier } = require("./user-bundle");
+const { packUserDir, restoreUserDir, hasSupplier, missingPackedFiles } = require("./user-bundle");
 const { createDurableStore, isDurableConfigured } = require("./durable-store");
 const { readMaybeEncryptedFile, writeEncryptedFile } = require("./file-crypto");
 const {
@@ -69,7 +69,7 @@ async function hydrateUser(sub, dir) {
   try {
     const bundle = await durable.load(sub);
     if (!bundle) return false;
-    if (hasSupplier(dir)) return false;
+    if (hasSupplier(dir) && missingPackedFiles(dir, bundle).length === 0) return false;
     restoreUserDir(dir, bundle);
     return true;
   } catch (err) {

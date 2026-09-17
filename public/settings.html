@@ -6,7 +6,7 @@
   <title>설정 · 납품서류</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/app.css?v=20260917" />
-  <script src="/settings-backup.js?v=20260917b"></script>
+  <script src="/settings-backup.js?v=20260917c"></script>
 </head>
 <body>
   <div class="topbar"><a class="logo" href="/">위캔</a></div>
@@ -69,7 +69,7 @@
 
       <div class="card">
         <h2>첨부 이미지</h2>
-        <p class="hint">도장이나 사인을 사진으로 찍어서 올리세요. 없으면 서류 서명란에 안 찍힙니다. 사업자증·통장도 여기. 사업자증·통장은 서버에만 암호화해서 두고, 이 폰에는 남기지 않습니다.</p>
+        <p class="hint">도장이나 사인을 사진으로 찍어서 올리세요. 없으면 서류 서명란에 안 찍힙니다. 사업자증·통장도 여기. 한 번 올리면 이 폰에도 넣어 두어서, 서버가 꺼져도 다시 불러옵니다.</p>
         <div class="file-row" data-kind="seal">
           <div>
             <strong>도장 또는 사인</strong>
@@ -112,13 +112,15 @@
   <script>
     const Backup = window.SettingsBackup || {
       KEY: "wecan_supplier_backup_v1",
-      PHONE_FILE_KINDS: ["seal"],
+      PHONE_FILE_KINDS: ["seal", "biz", "bank"],
       shouldRestoreSupplier: function () { return false; },
       filledCount: function () { return 0; },
       missingFileKinds: function () { return []; },
       scrubPhoneFiles: function (files) {
         const out = {};
-        if (files && files.seal) out.seal = files.seal;
+        for (const k of ["seal", "biz", "bank"]) {
+          if (files && files[k]) out[k] = files[k];
+        }
         return out;
       },
     };
@@ -283,7 +285,7 @@
 
     async function snapshotServerFiles(files) {
       const patch = {};
-      for (const kind of Backup.PHONE_FILE_KINDS || ["seal"]) {
+      for (const kind of Backup.PHONE_FILE_KINDS || ["seal", "biz", "bank"]) {
         if (!(files && files[kind])) continue;
         const backup = readBackup();
         if (backup && backup.files && backup.files[kind]) continue;

@@ -31,20 +31,20 @@ test("should restore seal when server lost the file", () => {
   );
 });
 
-test("does not restore business license or bank copy from the phone", () => {
+test("restores business license and bank copy from the phone when the server lost them", () => {
   assert.deepEqual(
     missingFileKinds(
       { seal: false, biz: false, bank: false },
       { seal: "s", biz: "b", bank: "k" },
     ),
-    ["seal"],
+    ["seal", "biz", "bank"],
   );
 });
 
-test("scrubPhoneFiles drops business license and bank copy", () => {
+test("scrubPhoneFiles keeps seal, business license, and bank copy", () => {
   assert.deepEqual(
     scrubPhoneFiles({ seal: "s", biz: "b", bank: "k" }),
-    { seal: "s" },
+    { seal: "s", biz: "b", bank: "k" },
   );
 });
 

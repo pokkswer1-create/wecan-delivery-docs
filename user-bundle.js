@@ -45,10 +45,20 @@ function hasSupplier(dir) {
   }
 }
 
+function missingPackedFiles(dir, bundle) {
+  if (!bundle || !bundle.files) return [];
+  return Object.keys(bundle.files).filter((name) => {
+    const row = bundle.files[name];
+    if (!row || !row.content) return false;
+    return !fs.existsSync(path.join(dir, path.basename(name)));
+  });
+}
+
 module.exports = {
   TEXT_FILES,
   BIN_FILES,
   packUserDir,
   restoreUserDir,
   hasSupplier,
+  missingPackedFiles,
 };

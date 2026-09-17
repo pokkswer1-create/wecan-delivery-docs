@@ -12,7 +12,7 @@
     "accountHolder",
   ];
   const FILE_KINDS = ["seal", "biz", "bank"];
-  const PHONE_FILE_KINDS = ["seal"];
+  const PHONE_FILE_KINDS = ["seal", "biz", "bank"];
 
   function filledCount(supplier) {
     const s = supplier || {};
