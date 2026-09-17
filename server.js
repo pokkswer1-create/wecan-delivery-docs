@@ -21,6 +21,7 @@ const { mailEnvelope } = require("./mail-envelope");
 const { resolveDataRoot } = require("./data-root");
 const { packUserDir, restoreUserDir, hasSupplier } = require("./user-bundle");
 const { createDurableStore, isDurableConfigured } = require("./durable-store");
+const { readMaybeEncryptedFile, writeEncryptedFile } = require("./file-crypto");
 const {
   userDir,
   listUserIds,
@@ -681,10 +682,10 @@ app.get("/api/supplier-file", requireUser, (req, res) => {
     return res.status(400).json({ ok: false, error: "kind는 seal, biz, bank 중 하나여야 합니다." });
   }
   const dest = path.join(req.userDir, file);
-  if (!fs.existsSync(dest)) {
+  const buf = readMaybeEncryptedFile(dest, sessionSecret());
+  if (!buf) {
     return res.status(404).json({ ok: false, error: "파일이 없습니다." });
   }
-  const buf = fs.readFileSync(dest);
   res.set("Cache-Control", "no-store");
   res.type(mimeFromBuffer(buf)).send(buf);
 });
@@ -714,8 +715,6 @@ app.put("/api/supplier", requireUser, async (req, res) => {
   try {
     const { supplier } = req.body || {};
     const saved = saveSupplierToDataDir(req.userDir, supplier);
-    const seedDir = path.join(__dirname, "data");
-    saveSupplierToDataDir(seedDir, saved);
     const remote = await persistUser(req.user.sub, req.userDir);
     res.json({
       ok: true,
@@ -746,8 +745,7 @@ app.put("/api/supplier-file", requireUser, async (req, res) => {
       return res.status(400).json({ ok: false, error: "이미지 크기가 올바르지 않습니다." });
     }
     const dest = path.join(req.userDir, file);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, buf);
+    writeEncryptedFile(dest, buf, sessionSecret());
     if (kind !== "seal") resetBizBankCache();
     await persistUser(req.user.sub, req.userDir);
     res.json({ ok: true, files: supplierFiles(req.userDir) });

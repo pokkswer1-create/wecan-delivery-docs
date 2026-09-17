@@ -69,7 +69,7 @@
 
       <div class="card">
         <h2>첨부 이미지</h2>
-        <p class="hint">도장이나 사인을 사진으로 찍어서 올리세요. 없으면 서류 서명란에 안 찍힙니다. 사업자증·통장도 여기.</p>
+        <p class="hint">도장이나 사인을 사진으로 찍어서 올리세요. 없으면 서류 서명란에 안 찍힙니다. 사업자증·통장도 여기. 사업자증·통장은 서버에만 암호화해서 두고, 이 폰에는 남기지 않습니다.</p>
         <div class="file-row" data-kind="seal">
           <div>
             <strong>도장 또는 사인</strong>
@@ -112,9 +112,15 @@
   <script>
     const Backup = window.SettingsBackup || {
       KEY: "wecan_supplier_backup_v1",
+      PHONE_FILE_KINDS: ["seal"],
       shouldRestoreSupplier: function () { return false; },
       filledCount: function () { return 0; },
       missingFileKinds: function () { return []; },
+      scrubPhoneFiles: function (files) {
+        const out = {};
+        if (files && files.seal) out.seal = files.seal;
+        return out;
+      },
     };
 
     const FIELDS = [
@@ -222,7 +228,9 @@
       const prev = readBackup() || { supplier: {}, files: {} };
       const next = {
         supplier: patch.supplier != null ? patch.supplier : prev.supplier,
-        files: Object.assign({}, prev.files || {}, patch.files || {}),
+        files: Backup.scrubPhoneFiles(
+          Object.assign({}, prev.files || {}, patch.files || {})
+        ),
       };
       if (patch.removeFile) delete next.files[patch.removeFile];
       try {
@@ -275,7 +283,7 @@
 
     async function snapshotServerFiles(files) {
       const patch = {};
-      for (const kind of ["seal", "biz", "bank"]) {
+      for (const kind of Backup.PHONE_FILE_KINDS || ["seal"]) {
         if (!(files && files[kind])) continue;
         const backup = readBackup();
         if (backup && backup.files && backup.files[kind]) continue;

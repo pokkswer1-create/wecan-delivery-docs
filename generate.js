@@ -9,6 +9,7 @@ const {
   docFilePrefix,
 } = require("./supplier");
 const { loadSealFromDataDir, signHtml: signMarkHtml } = require("./sign-mark");
+const { readMaybeEncryptedFile, fileSecret } = require("./file-crypto");
 const crypto = require("crypto");
 
 const ROOT = __dirname;
@@ -583,8 +584,8 @@ ${fontHead()}
 
 function resolveDataOrAsset(imageFile) {
   const custom = path.join(activeDataDir, imageFile);
-  if (fs.existsSync(custom)) {
-    const buf = fs.readFileSync(custom);
+  const buf = readMaybeEncryptedFile(custom, fileSecret());
+  if (buf && buf.length) {
     const ext = path.extname(imageFile).toLowerCase();
     const mime =
       ext === ".jpg" || ext === ".jpeg"

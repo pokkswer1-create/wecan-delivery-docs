@@ -4,6 +4,7 @@ const {
   filledCount,
   shouldRestoreSupplier,
   missingFileKinds,
+  scrubPhoneFiles,
 } = require("./public/settings-backup");
 
 test("should restore when server is empty and phone has a backup", () => {
@@ -27,6 +28,23 @@ test("should restore seal when server lost the file", () => {
   assert.deepEqual(
     missingFileKinds({ seal: false, biz: false, bank: false }, { seal: "data:image/png;base64,xx" }),
     ["seal"],
+  );
+});
+
+test("does not restore business license or bank copy from the phone", () => {
+  assert.deepEqual(
+    missingFileKinds(
+      { seal: false, biz: false, bank: false },
+      { seal: "s", biz: "b", bank: "k" },
+    ),
+    ["seal"],
+  );
+});
+
+test("scrubPhoneFiles drops business license and bank copy", () => {
+  assert.deepEqual(
+    scrubPhoneFiles({ seal: "s", biz: "b", bank: "k" }),
+    { seal: "s" },
   );
 });
 

@@ -1,5 +1,5 @@
-const fs = require("fs");
 const path = require("path");
+const { readMaybeEncryptedFile, fileSecret } = require("./file-crypto");
 
 function sealPath(rootDir) {
   return path.join(rootDir, "data", "seal.png");
@@ -7,9 +7,8 @@ function sealPath(rootDir) {
 
 function loadSealFromDataDir(dataDir) {
   const p = path.join(dataDir, "seal.png");
-  if (!fs.existsSync(p)) return "";
-  const buf = fs.readFileSync(p);
-  if (buf.length < 8) return "";
+  const buf = readMaybeEncryptedFile(p, fileSecret());
+  if (!buf || buf.length < 8) return "";
   return `data:${mimeFromBuffer(buf)};base64,${buf.toString("base64")}`;
 }
 
