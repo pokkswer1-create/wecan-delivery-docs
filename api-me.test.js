@@ -86,6 +86,33 @@ test("POST /auth/session sets a cookie that /api/me accepts", async () => {
   }
 });
 
+test("POST /api/clients saves a client for the logged-in user", async () => {
+  const { app } = require("./server");
+  const server = await listen(app);
+  try {
+    const { port } = server.address();
+    const token = signSession(
+      { sub: "12345", email: "owner@example.com" },
+      process.env.SESSION_SECRET
+    );
+    const cookie = `${COOKIE}=${token}`;
+    const post = await fetch(`http://127.0.0.1:${port}/api/clients`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie },
+      body: JSON.stringify({ client: { name: "한빛체육", email: "hanbit@test.com" } }),
+    });
+    const saved = await post.json();
+    assert.equal(saved.ok, true);
+    assert.equal(saved.clients[0].name, "한빛체육");
+    const get = await fetch(`http://127.0.0.1:${port}/api/clients`, {
+      headers: { cookie },
+    }).then((r) => r.json());
+    assert.equal(get.clients[0].email, "hanbit@test.com");
+  } finally {
+    await close(server);
+  }
+});
+
 test("POST /auth/session rejects a bad token", async () => {
   const { app } = require("./server");
   const server = await listen(app);

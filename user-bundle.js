@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const TEXT_FILES = ["supplier.json", "presets.json", "mail-log.json", "tokens.json"];
+const TEXT_FILES = ["supplier.json", "presets.json", "clients.json", "mail-log.json", "tokens.json"];
 const BIN_FILES = ["seal.png", "biz_reg.png", "bank.png"];
 
 function packUserDir(dir) {

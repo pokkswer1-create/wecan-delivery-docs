@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>위캔 납품서류</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="/app.css?v=20260917" />
+  <link rel="stylesheet" href="/app.css?v=20260920" />
 </head>
 <body>
   <div class="topbar"><a class="logo" href="/">위캔</a></div>
@@ -77,8 +77,22 @@
 
       <div class="card">
         <h2>수신 / 일자</h2>
+        <label for="clientPick">저장된 거래처</label>
+        <select id="clientPick">
+          <option value="">직접 입력</option>
+        </select>
         <label for="client">수신처</label>
-        <input id="client" type="text" placeholder="수신처 입력" />
+        <input id="client" type="text" placeholder="수신처 입력" autocomplete="organization" />
+        <label for="clientPhone">거래처 전화 (선택)</label>
+        <input id="clientPhone" type="tel" placeholder="없으면 비워 두세요" />
+        <div class="file-row" style="margin:0 0 12px;padding:0;border:0">
+          <div></div>
+          <div class="actions">
+            <button type="button" class="ghost" id="saveClient" style="margin:0">이 거래처 저장</button>
+            <button type="button" class="ghost" id="deleteClient" style="margin:0">삭제</button>
+          </div>
+        </div>
+        <div class="status" id="clientStatus"></div>
         <label for="quoteDate">견적서 날짜</label>
         <input id="quoteDate" type="date" />
         <label for="deliveryDate">납품서 날짜</label>
@@ -128,6 +142,11 @@
       note: document.getElementById("note"),
       sumText: document.getElementById("sumText"),
       client: document.getElementById("client"),
+      clientPick: document.getElementById("clientPick"),
+      clientPhone: document.getElementById("clientPhone"),
+      saveClient: document.getElementById("saveClient"),
+      deleteClient: document.getElementById("deleteClient"),
+      clientStatus: document.getElementById("clientStatus"),
       quoteDate: document.getElementById("quoteDate"),
       deliveryDate: document.getElementById("deliveryDate"),
       sendEmail: document.getElementById("sendEmail"),
@@ -142,6 +161,7 @@
     };
 
     let catalog = [];
+    let clients = [];
     let rows = [];
     let photoPackageIds = [];
 
@@ -319,6 +339,43 @@
       });
     }
 
+    function showClientStatus(type, text) {
+      els.clientStatus.className = "status show " + type;
+      els.clientStatus.textContent = text;
+    }
+
+    function renderClientPick() {
+      const current = els.clientPick.value;
+      els.clientPick.innerHTML = '<option value="">직접 입력</option>';
+      clients.forEach((c) => {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = c.email ? `${c.name} · ${c.email}` : c.name;
+        els.clientPick.appendChild(opt);
+      });
+      if (current && clients.some((c) => c.id === current)) {
+        els.clientPick.value = current;
+      }
+    }
+
+    function applyClient(c) {
+      if (!c) return;
+      els.client.value = c.name || "";
+      els.clientPhone.value = c.phone || "";
+      if (c.email) els.emailTo.value = c.email;
+    }
+
+    async function loadClients() {
+      try {
+        const res = await fetch("/api/clients", { cache: "no-store", credentials: "include" });
+        const data = await readJson(res);
+        if (data.ok && Array.isArray(data.clients)) clients = data.clients;
+      } catch (_) {
+        clients = [];
+      }
+      renderClientPick();
+    }
+
     function showCatalogStatus(type, text) {
       els.catalogStatus.className = "status show " + type;
       els.catalogStatus.textContent = text;
@@ -456,7 +513,67 @@
       els.emailTo.required = els.sendEmail.checked;
       setNavUnlocked(true);
       await loadCatalog();
+      await loadClients();
     }
+
+    els.clientPick.addEventListener("change", () => {
+      const c = clients.find((x) => x.id === els.clientPick.value);
+      applyClient(c);
+    });
+    els.saveClient.addEventListener("click", async () => {
+      const name = els.client.value.trim();
+      if (!name) {
+        showClientStatus("err", "수신처 이름을 먼저 넣으세요.");
+        return;
+      }
+      try {
+        const res = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            client: {
+              id: els.clientPick.value || undefined,
+              name,
+              email: els.emailTo.value.trim(),
+              phone: els.clientPhone.value.trim(),
+            },
+          }),
+        });
+        const data = await readJson(res);
+        if (!data.ok) throw new Error(data.error || "저장 실패");
+        clients = data.clients;
+        renderClientPick();
+        const saved = clients.find((c) => c.name === name);
+        if (saved) els.clientPick.value = saved.id;
+        showClientStatus("ok", "저장됨. 다음부터 위에서 고르면 됩니다.");
+      } catch (err) {
+        showClientStatus("err", err.message);
+      }
+    });
+    els.deleteClient.addEventListener("click", async () => {
+      const id = els.clientPick.value;
+      if (!id) {
+        showClientStatus("err", "지울 거래처를 위에서 고르세요.");
+        return;
+      }
+      try {
+        const next = clients.filter((c) => c.id !== id);
+        const res = await fetch("/api/clients", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ clients: next }),
+        });
+        const data = await readJson(res);
+        if (!data.ok) throw new Error(data.error || "삭제 실패");
+        clients = data.clients;
+        renderClientPick();
+        showClientStatus("ok", "목록에서 뺐습니다.");
+      } catch (err) {
+        showClientStatus("err", err.message);
+      }
+    });
 
     els.toggleManage.addEventListener("click", () => {
       els.manageBox.classList.toggle("hidden");

@@ -17,6 +17,7 @@ const {
   fmt,
 } = require("./generate");
 const { saveSupplierToDataDir, isComplete, missingFields } = require("./supplier");
+const { loadClients, saveClients, upsertClient } = require("./clients");
 const { mailEnvelope } = require("./mail-envelope");
 const { resolveDataRoot } = require("./data-root");
 const { packUserDir, restoreUserDir, hasSupplier, missingPackedFiles } = require("./user-bundle");
@@ -667,6 +668,30 @@ function writePresets(list, dir) {
   fs.writeFileSync(p, JSON.stringify(payload, null, 2), "utf8");
   return payload;
 }
+
+app.get("/api/clients", requireUser, (req, res) => {
+  res.json({ ok: true, clients: loadClients(req.userDir) });
+});
+
+app.put("/api/clients", requireUser, async (req, res) => {
+  try {
+    const clients = saveClients(req.userDir, (req.body && req.body.clients) || []);
+    await persistUser(req.user.sub, req.userDir);
+    res.json({ ok: true, clients });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "저장 실패" });
+  }
+});
+
+app.post("/api/clients", requireUser, async (req, res) => {
+  try {
+    const clients = upsertClient(req.userDir, (req.body && req.body.client) || req.body || {});
+    await persistUser(req.user.sub, req.userDir);
+    res.json({ ok: true, clients });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "저장 실패" });
+  }
+});
 
 app.get("/api/presets", requireUser, (req, res) => {
   const data = readPresets(req.userDir);

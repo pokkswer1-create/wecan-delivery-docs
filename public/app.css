@@ -96,6 +96,7 @@ input[type="tel"],
 input[type="date"],
 input[type="number"],
 input[type="password"],
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -109,7 +110,7 @@ textarea {
   font-family: inherit;
 }
 textarea { min-height: 64px; resize: vertical; }
-input:focus, textarea:focus {
+input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(3, 199, 90, 0.15);
 }
