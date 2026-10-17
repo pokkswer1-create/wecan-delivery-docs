@@ -533,8 +533,27 @@ ${fontHead()}
 </html>`;
 }
 
-/** 견적+납품+명세를 한 번에 PDF로 (Puppeteer 호출 1회) */
-function makeTripleDocHtml(pkg, ctx) {
+const ALL_DOC_TYPES = ["quote", "delivery", "statement"];
+
+function normalizeDocTypes(raw) {
+  if (raw == null) return ALL_DOC_TYPES.slice();
+  const list = Array.isArray(raw) ? raw : [raw];
+  const seen = new Set();
+  const out = [];
+  for (const item of list) {
+    const key = String(item || "").trim();
+    if (ALL_DOC_TYPES.includes(key) && !seen.has(key)) {
+      seen.add(key);
+      out.push(key);
+    }
+  }
+  if (!out.length) throw new Error("보낼 서류를 1개 이상 선택하세요.");
+  return out;
+}
+
+/** 선택한 서류만 한 번에 PDF로 (Puppeteer 호출 1회) */
+function makeTripleDocHtml(pkg, ctx, docTypes) {
+  const types = normalizeDocTypes(docTypes);
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -544,9 +563,7 @@ ${fontHead()}
 <style>${docCss()}</style>
 </head>
 <body>
-  ${makeDocSheet(pkg, "quote", ctx)}
-  ${makeDocSheet(pkg, "delivery", ctx)}
-  ${makeDocSheet(pkg, "statement", ctx)}
+  ${types.map((type) => makeDocSheet(pkg, type, ctx)).join("\n")}
 </body>
 </html>`;
 }
@@ -779,11 +796,12 @@ async function buildPackage(pkg, options = {}) {
 
   const parts = [];
   const includeBizBank = options.includeBizBank !== false;
+  const docTypes = normalizeDocTypes(options.docTypes);
   const jobs = [];
 
   const docsHtml = path.join(dir, "01_03_docs.html");
   const docsPdf = path.join(dir, "01_03_docs.pdf");
-  fs.writeFileSync(docsHtml, makeTripleDocHtml(pkg, ctx), "utf8");
+  fs.writeFileSync(docsHtml, makeTripleDocHtml(pkg, ctx, docTypes), "utf8");
   jobs.push({ html: docsHtml, pdf: docsPdf, part: "docs" });
 
   let photoPdf = null;
@@ -814,6 +832,8 @@ async function buildPackage(pkg, options = {}) {
 
 async function buildCombined(packages, options = {}) {
   const ctx = resolveCtx(options);
+  const includeBizBank = options.includeBizBank !== false;
+  const docTypes = normalizeDocTypes(options.docTypes);
   const dir = path.join(TMP, "combined");
   fs.mkdirSync(dir, { recursive: true });
   fs.mkdirSync(OUT, { recursive: true });
@@ -826,7 +846,7 @@ async function buildCombined(packages, options = {}) {
 
     const docsHtml = path.join(pkgDir, "01_03_docs.html");
     const docsPdf = path.join(pkgDir, "01_03_docs.pdf");
-    fs.writeFileSync(docsHtml, makeTripleDocHtml(pkg, ctx), "utf8");
+    fs.writeFileSync(docsHtml, makeTripleDocHtml(pkg, ctx, docTypes), "utf8");
     jobs.push({ html: docsHtml, pdf: docsPdf });
     parts.push(docsPdf);
 
@@ -845,9 +865,9 @@ async function buildCombined(packages, options = {}) {
 
   const [, bizBank] = await Promise.all([
     htmlToPdfMany(jobs, 2),
-    writeBizBankPdfs(dir),
+    includeBizBank ? writeBizBankPdfs(dir) : Promise.resolve([]),
   ]);
-  parts.push(...bizBank);
+  if (includeBizBank) parts.push(...bizBank);
 
   const titles = packages.map((p) => p.title).join("_");
   const fileName = `${docFilePrefix(getSupplier())}_납품서류_통합_${titles.replace(/\s+/g, "")}.pdf`;
@@ -872,6 +892,8 @@ async function buildFromRequest(req) {
     date: req.date,
     quoteDate: req.quoteDate,
     deliveryDate: req.deliveryDate,
+    docTypes: normalizeDocTypes(req.docTypes),
+    includeBizBank: req.includeBizBank !== false,
   };
 
   if (req.mode === "combined" || packages.length > 1) {
@@ -926,6 +948,8 @@ module.exports = {
   resolvePackages,
   resolveCtx,
   makeDocSheet,
+  makeTripleDocHtml,
+  normalizeDocTypes,
   todayISO,
   fmt,
 };

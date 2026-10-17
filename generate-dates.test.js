@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { resolveCtx, makeDocSheet } = require("./generate");
+const { resolveCtx, makeDocSheet, makeTripleDocHtml, normalizeDocTypes } = require("./generate");
 
 const samplePkg = {
   title: "테스트품목",
@@ -52,4 +52,31 @@ test("견적서 HTML uses quote date, 납품서 HTML uses delivery date", () => 
   assert.doesNotMatch(delivery, /2026년 09월 01일/);
   assert.match(statement, /2026년 09월 08일/);
   assert.doesNotMatch(statement, /2026년 09월 01일/);
+});
+
+test("normalizeDocTypes defaults to quote, delivery, statement", () => {
+  assert.deepEqual(normalizeDocTypes(), ["quote", "delivery", "statement"]);
+});
+
+test("normalizeDocTypes keeps chosen order and drops unknown", () => {
+  assert.deepEqual(normalizeDocTypes(["statement", "nope", "quote"]), [
+    "statement",
+    "quote",
+  ]);
+});
+
+test("normalizeDocTypes rejects empty selection", () => {
+  assert.throws(() => normalizeDocTypes([]), /1개 이상/);
+});
+
+test("makeTripleDocHtml includes only selected document types", () => {
+  const ctx = resolveCtx({
+    client: "수신처",
+    quoteDate: "2026-09-01",
+    deliveryDate: "2026-09-08",
+  });
+  const html = makeTripleDocHtml(samplePkg, ctx, ["quote"]);
+  assert.match(html, /견 적 서/);
+  assert.doesNotMatch(html, /납 품 서/);
+  assert.doesNotMatch(html, /거래명세서/);
 });

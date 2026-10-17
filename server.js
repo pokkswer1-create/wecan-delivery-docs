@@ -133,7 +133,7 @@ app.use((req, _res, next) => {
 app.use("/downloads", express.static(OUT));
 
 const PUBLIC_DIR = path.join(__dirname, "public");
-const APP_VERSION = "2026-09-17-login";
+const APP_VERSION = "2026-10-17-docs";
 
 app.get(["/stamp", "/stamp.html"], (_req, res) => {
   res.redirect(301, "/settings.html");
@@ -834,6 +834,8 @@ app.post("/api/generate", requireUser, async (req, res) => {
       date,
       quoteDate,
       deliveryDate,
+      docTypes,
+      includeBizBank,
       totals,
       rentalDailyIncl,
       rentalDays,
@@ -859,6 +861,8 @@ app.post("/api/generate", requireUser, async (req, res) => {
       date: date || todayISO(),
       quoteDate: quoteDate || date || todayISO(),
       deliveryDate: deliveryDate || date || todayISO(),
+      docTypes,
+      includeBizBank,
       totals: totals || {},
       rentalDailyIncl,
       rentalDays,

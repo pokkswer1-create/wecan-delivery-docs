@@ -101,6 +101,17 @@
       </div>
 
       <div class="card">
+        <h2>보낼 서류</h2>
+        <p class="hint">체크한 것만 PDF에 넣고 보냅니다.</p>
+        <div class="checks">
+          <label class="inline"><input id="docQuote" type="checkbox" checked /> 견적서</label>
+          <label class="inline"><input id="docDelivery" type="checkbox" checked /> 납품서</label>
+          <label class="inline"><input id="docStatement" type="checkbox" checked /> 거래명세서</label>
+          <label class="inline"><input id="docBizBank" type="checkbox" checked /> 사업자등록증 · 통장사본</label>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>이메일</h2>
         <div class="checks">
           <label class="inline"><input id="sendEmail" type="checkbox" checked /> PDF를 이메일로 보내기</label>
@@ -149,6 +160,10 @@
       clientStatus: document.getElementById("clientStatus"),
       quoteDate: document.getElementById("quoteDate"),
       deliveryDate: document.getElementById("deliveryDate"),
+      docQuote: document.getElementById("docQuote"),
+      docDelivery: document.getElementById("docDelivery"),
+      docStatement: document.getElementById("docStatement"),
+      docBizBank: document.getElementById("docBizBank"),
       sendEmail: document.getElementById("sendEmail"),
       emailTo: document.getElementById("emailTo"),
       emailCc: document.getElementById("emailCc"),
@@ -197,6 +212,13 @@
     }
     function uid() {
       return "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+    function selectedDocTypes() {
+      const types = [];
+      if (els.docQuote.checked) types.push("quote");
+      if (els.docDelivery.checked) types.push("delivery");
+      if (els.docStatement.checked) types.push("statement");
+      return types;
     }
     function blankRow() {
       return { name: "", spec: "", unit: "식", qty: 1, unitPriceIncl: 0 };
@@ -640,6 +662,11 @@
         showStatus("err", "품명을 1개 이상 입력하세요.");
         return;
       }
+      const docTypes = selectedDocTypes();
+      if (!docTypes.length) {
+        showStatus("err", "보낼 서류를 1개 이상 선택하세요.");
+        return;
+      }
       els.submitBtn.disabled = true;
       showStatus("ok", "생성 중… 최대 1분 정도 걸릴 수 있습니다.");
       try {
@@ -654,6 +681,8 @@
             client: els.client.value.trim(),
             quoteDate: els.quoteDate.value || todayLocal(),
             deliveryDate: els.deliveryDate.value || todayLocal(),
+            docTypes,
+            includeBizBank: els.docBizBank.checked,
             emailTo: els.emailTo.value.trim(),
             emailCc: els.emailCc.value.trim(),
             subject: els.subject.value.trim(),
